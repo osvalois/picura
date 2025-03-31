@@ -1,0 +1,68 @@
+appId: "com.picura.md"
+productName: "Picura MD"
+copyright: "Copyright © 2025 Picura MD Team"
+
+directories:
+  output: "release"
+  buildResources: "build-resources"
+
+files:
+  - "dist/**/*"
+  - "package.json"
+  - "!node_modules/**/*"
+  - "build-resources/**/*"
+
+mac:
+  category: "public.app-category.productivity"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  target:
+    - "dmg"
+    - "zip"
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+  icon: "build-resources/icon.icns"
+  darkModeSupport: true
+  entitlements: "build-resources/entitlements.mac.plist"
+  entitlementsInherit: "build-resources/entitlements.mac.plist"
+
+dmg:
+  sign: false
+  contents:
+    - { x: 130, y: 220 }
+    - { x: 410, y: 220, type: "link", path: "/Applications" }
+
+linux:
+  target:
+    - "AppImage"
+    - "deb"
+    - "rpm"
+  maintainer: "Picura MD Team"
+  category: "Utility"
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+  icon: "build-resources/icons"
+
+win:
+  target:
+    - "nsis"
+    - "portable"
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+  icon: "build-resources/icon.ico"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: true
+
+portable:
+  artifactName: "${productName}-${version}-portable.${ext}"
+
+publish:
+  provider: "github"
+  private: false
+  releaseType: "release"
+
+extraMetadata:
+  main: "dist/main/index.js"
+
+electronVersion: "23.1.0"
