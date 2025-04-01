@@ -4,16 +4,17 @@ import {
   SustainabilityMetrics, 
   OptimizationSuggestion 
 } from '../../shared/types/SustainabilityMetrics';
+import { ElectronAPI } from '@/shared/types/Commons';
 
-// API del contexto
+// Context API
 interface SustainabilityContextType {
-  // Métricas actuales
+  // Current metrics
   sustainabilityMetrics: SustainabilityMetrics;
-  // Modo de energía actual
+  // Current energy mode
   currentEnergyMode: EnergyMode;
-  // Sugerencias de optimización
+  // Optimization suggestions
   optimizationSuggestions: OptimizationSuggestion[];
-  // Informe de sostenibilidad
+  // Sustainability report
   sustainabilityReport: {
     sessionDuration: number;
     currentPower: number;
@@ -22,32 +23,23 @@ interface SustainabilityContextType {
     co2Savings: number;
     sustainabilityScore: number;
   } | null;
-  // Funciones
+  // Functions
   setEnergyMode: (mode: EnergyMode) => Promise<void>;
   applyOptimizationSuggestion: (suggestionId: string) => Promise<boolean>;
   refreshMetrics: () => Promise<void>;
-  // Estado de carga
+  // Loading state
   isLoading: boolean;
 }
 
-// Configuración de IPC
-interface ElectronAPI {
-  getSustainabilityMetrics: () => Promise<SustainabilityMetrics>;
-  getEnergyMode: () => Promise<EnergyMode>;
-  setEnergyMode: (mode: EnergyMode) => Promise<void>;
-  getSustainabilityReport: () => Promise<any>;
-  applyOptimizationSuggestion: (id: string) => Promise<boolean>;
-  // Otros métodos según necesidad...
-}
 
-// Acceso a API de Electron (definida en preload.js)
+// Access to Electron API (defined in preload.js)
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI?: ElectronAPI;
   }
 }
 
-// Valores por defecto
+// Default values
 const defaultContextValue: SustainabilityContextType = {
   sustainabilityMetrics: {
     cpu: { current: 0, average: 0, peak: 0 },
@@ -66,36 +58,36 @@ const defaultContextValue: SustainabilityContextType = {
   isLoading: true,
 };
 
-// Creación del contexto
+// Context creation
 const SustainabilityContext = createContext<SustainabilityContextType>(defaultContextValue);
 
-// Props para el proveedor
+// Provider props
 interface SustainabilityProviderProps {
   children: ReactNode;
-  pollInterval?: number; // Intervalo de actualización en ms
+  pollInterval?: number; // Update interval in ms
 }
 
 /**
- * Proveedor del contexto de sostenibilidad
- * Gestiona métricas y acciones relacionadas con eficiencia energética
+ * Sustainability Context Provider
+ * Manages metrics and actions related to energy efficiency
  */
 export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({ 
   children,
-  pollInterval = 5000 // Por defecto, actualiza cada 5 segundos
+  pollInterval = 5000 // Default: update every 5 seconds
 }) => {
-  // Estado
+  // State
   const [metrics, setMetrics] = useState<SustainabilityMetrics>(defaultContextValue.sustainabilityMetrics);
   const [energyMode, setEnergyMode] = useState<EnergyMode>('standard');
   const [suggestions, setSuggestions] = useState<OptimizationSuggestion[]>([]);
   const [report, setReport] = useState(defaultContextValue.sustainabilityReport);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Temporizador para actualizaciones periódicas
+  // Timer for periodic updates
   const [pollTimer, setPollTimer] = useState<NodeJS.Timeout | null>(null);
   
-  // Inicialización
+  // Initialization
   useEffect(() => {
-    // Carga inicial de datos
+    // Initial data loading
     const initialize = async () => {
       try {
         await Promise.all([
@@ -113,14 +105,14 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
     
     initialize();
     
-    // Configuración de actualización periódica
+    // Configure periodic updates
     const timer = setInterval(() => {
-      refreshMetrics(false); // Actualización en segundo plano
+      refreshMetrics(false); // Background update
     }, pollInterval);
     
     setPollTimer(timer);
     
-    // Limpieza
+    // Cleanup
     return () => {
       if (pollTimer) {
         clearInterval(pollTimer);
@@ -128,32 +120,32 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
     };
   }, []);
   
-  // Ajusta intervalo de actualización según el modo de energía
+  // Adjust update interval based on energy mode
   useEffect(() => {
-    // Limpia temporizador existente
+    // Clear existing timer
     if (pollTimer) {
       clearInterval(pollTimer);
     }
     
-    // Ajusta intervalo según modo
+    // Adjust interval based on mode
     let interval = pollInterval;
     
     switch (energyMode) {
       case 'highPerformance':
-        interval = 2000; // Más frecuente
+        interval = 2000; // More frequent
         break;
       case 'standard':
-        interval = 5000; // Predeterminado
+        interval = 5000; // Default
         break;
       case 'lowPower':
-        interval = 10000; // Menos frecuente
+        interval = 10000; // Less frequent
         break;
       case 'ultraSaving':
-        interval = 30000; // Mínimo
+        interval = 30000; // Minimum
         break;
     }
     
-    // Configura nuevo temporizador
+    // Configure new timer
     const timer = setInterval(() => {
       refreshMetrics(false);
     }, interval);
@@ -163,26 +155,29 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
     return () => {
       clearInterval(timer);
     };
-  }, [energyMode]);
+  }, [energyMode, pollInterval]);
   
-  // Escucha eventos de IPC para actualizaciones
+  // Listen for IPC events
   useEffect(() => {
-    // Configuración de listeners (implementación depende de preload.js)
-    const setupListeners = () => {
-      // Ejemplo: escuchar cambios de modo de energía
-      if (window.electronAPI && window.electronAPI.onEnergyModeChanged) {
-        window.electronAPI.onEnergyModeChanged((event: any, data: any) => {
-          setEnergyMode(data.mode);
-        });
-      }
-      
-      // Otros listeners según necesidad...
-    };
+    // Setup listeners (implementation depends on preload.js)
+    let cleanup: (() => void) | undefined;
     
-    setupListeners();
+    if (window.electronAPI?.onEnergyModeChanged) {
+      const handler = (data: { mode: EnergyMode }) => {
+        setEnergyMode(data.mode);
+      };
+      
+      // Store the cleanup function returned by onEnergyModeChanged
+      cleanup = window.electronAPI.onEnergyModeChanged(handler);
+    }
+    
+    // Return cleanup function if available
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, []);
   
-  // Actualiza métricas de sostenibilidad
+  // Update sustainability metrics
   const refreshMetrics = async (showLoading = true) => {
     try {
       if (showLoading) {
@@ -193,7 +188,7 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
         const newMetrics = await window.electronAPI.getSustainabilityMetrics();
         setMetrics(newMetrics);
         
-        // También actualiza sugerencias si están disponibles
+        // Also update suggestions if available
         if (window.electronAPI.getOptimizationSuggestions) {
           const newSuggestions = await window.electronAPI.getOptimizationSuggestions();
           setSuggestions(newSuggestions);
@@ -206,9 +201,12 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
         setIsLoading(false);
       }
     }
+    
+    // Return promise for chaining
+    return Promise.resolve();
   };
   
-  // Carga modo de energía actual
+  // Load current energy mode
   const loadEnergyMode = async () => {
     try {
       if (window.electronAPI) {
@@ -218,9 +216,12 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
     } catch (error) {
       console.error('Error loading energy mode:', error);
     }
+    
+    // Return promise for chaining
+    return Promise.resolve();
   };
   
-  // Cambia modo de energía
+  // Change energy mode
   const changeEnergyMode = async (mode: EnergyMode) => {
     try {
       setIsLoading(true);
@@ -234,21 +235,24 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
     } finally {
       setIsLoading(false);
     }
+    
+    // Return promise for chaining
+    return Promise.resolve();
   };
   
-  // Aplica una sugerencia de optimización
+  // Apply an optimization suggestion
   const applyOptimization = async (suggestionId: string): Promise<boolean> => {
     try {
       setIsLoading(true);
       
-      if (window.electronAPI && window.electronAPI.applyOptimizationSuggestion) {
+      if (window.electronAPI?.applyOptimizationSuggestion) {
         const success = await window.electronAPI.applyOptimizationSuggestion(suggestionId);
         
         if (success) {
-          // Actualiza métricas y sugerencias después de aplicar
+          // Update metrics and suggestions after applying
           await refreshMetrics(false);
           
-          // Elimina la sugerencia aplicada de la lista
+          // Remove the applied suggestion from the list
           setSuggestions(prev => prev.filter(s => s.id !== suggestionId));
         }
         
@@ -264,19 +268,22 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
     }
   };
   
-  // Carga informe de sostenibilidad
+  // Load sustainability report
   const loadSustainabilityReport = async () => {
     try {
-      if (window.electronAPI && window.electronAPI.getSustainabilityReport) {
+      if (window.electronAPI?.getSustainabilityReport) {
         const newReport = await window.electronAPI.getSustainabilityReport();
         setReport(newReport);
       }
     } catch (error) {
       console.error('Error loading sustainability report:', error);
     }
+    
+    // Return promise for chaining
+    return Promise.resolve();
   };
   
-  // Valor del contexto
+  // Context value
   const contextValue: SustainabilityContextType = {
     sustainabilityMetrics: metrics,
     currentEnergyMode: energyMode,
@@ -295,7 +302,7 @@ export const SustainabilityProvider: React.FC<SustainabilityProviderProps> = ({
   );
 };
 
-// Hook personalizado para acceder al contexto
+// Custom hook to access the context
 export const useSustainabilityContext = (): SustainabilityContextType => {
   const context = useContext(SustainabilityContext);
   

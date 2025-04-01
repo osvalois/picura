@@ -22,12 +22,9 @@ const BasicEditor: React.FC<BasicEditorProps> = ({
   content,
   onChange,
   onSave,
-  onSelectionChange,
   readOnly,
-  energyMode,
   fontSize,
   fontFamily,
-  lineNumbers,
   tabSize
 }) => {
   // Referencias DOM
@@ -185,7 +182,7 @@ const BasicEditor: React.FC<BasicEditorProps> = ({
   // Componente de edición optimizado
   const Editor = React.memo(() => (
     <textarea
-      ref={editorRef as React.RefObject<HTMLTextAreaElement>}
+      ref={editorRef as unknown as React.RefObject<HTMLTextAreaElement>}
       value={content}
       onChange={handleChange}
       onKeyDown={handleKeyDown}

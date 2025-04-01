@@ -2,14 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AISuggestion, AIContext } from '../../../shared/types/AITypes';
 import { useSustainabilityContext } from '../../contexts/SustainabilityContext';
 import { debounce } from '../../utils/performanceUtils';
+import { EnergyMode } from '../../../shared/types/SustainabilityMetrics';
 
 interface AIAssistantProps {
   documentId?: string;
-  documentTitle?: string;
-  editorContent: string;
-  cursorPosition: number;
-  onSuggestionApply: (suggestion: string, replaceStart?: number, replaceEnd?: number) => void;
-  enabled: boolean;
+  documentTitle: string
+  documentContent?: string;
+  onClose?: () => void;
+  energyMode?: EnergyMode;
+  editorContent?: string; // Make optional or provide default
+  cursorPosition?: number; // Make optional or provide default
+  onSuggestionApply?: (suggestion: string, replaceStart?: number, replaceEnd?: number) => void;
+  enabled?: boolean; // Provide default
 }
 
 /**
@@ -46,21 +50,23 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     
     // Crea contexto alrededor del cursor
     const precedingText = editorContent.substring(0, cursorPosition);
-    const followingText = editorContent.substring(cursorPosition);
+    const followingText = editorContent.substring(cursorPosition ?? 0);
     
     // Limita tamaño de contexto según modo de energía
     const contextLimit = 
       currentEnergyMode === 'ultraSaving' ? 500 : 
       currentEnergyMode === 'lowPower' ? 1000 : 2000;
+      if (documentId && documentTitle) {
+        const context: AIContext = {
+          documentId,
+          documentTitle,
+          precedingText: precedingText.slice(-contextLimit),
+          followingText: followingText.slice(0, contextLimit)
+        };
+        contextRef.current = context;
+    }
     
-    const context: AIContext = {
-      documentId,
-      documentTitle,
-      precedingText: precedingText.slice(-contextLimit),
-      followingText: followingText.slice(0, contextLimit)
-    };
-    
-    contextRef.current = context;
+
     
     // Si está en modo auto, solicita sugerencias
     if (assistantMode === 'auto') {
@@ -78,7 +84,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
   }, currentEnergyMode === 'lowPower' ? 1000 : 500);
   
   // Solicita sugerencias al servicio de IA
-  const getSuggestions = async (context: AIContext) => {
+  const getSuggestions = async (_: AIContext) => {
     if (isDisabled) return;
     
     setIsLoading(true);
@@ -255,8 +261,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
               <li 
                 key={suggestion.id}
                 className="suggestion-item p-2 bg-gray-50 dark:bg-gray-700 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer transition-colors"
-                onClick={() => onSuggestionApply(suggestion.text, suggestion.replacementStart, suggestion.replacementEnd)}
-              >
+                onClick={() => onSuggestionApply?.(suggestion.text, suggestion.replacementStart, suggestion.replacementEnd)}              >
                 <p className="text-sm text-gray-800 dark:text-gray-200">{suggestion.text}</p>
                 
                 {/* Optimización: Mostrar métricas sólo en modo alto rendimiento */}

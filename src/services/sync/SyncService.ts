@@ -1,10 +1,8 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { app } from 'electron';
-import { v4 as uuidv4 } from 'uuid';
 import isomorphicGit from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
-import { Document } from '../../shared/types/Document';
 import { eventBus } from '../../core/events/EventBus';
 import { SyncEventType, SystemEventType, DocumentEventType } from '../../core/events/EventTypes';
 import { documentService } from '../document/DocumentService';
@@ -444,8 +442,7 @@ export class SyncService {
     });
 
     // Escucha eventos de guardado de documentos para posible commit
-    eventBus.on(DocumentEventType.DOCUMENT_SAVED, async (data: { documentId: string }) => {
-      // En modo de alto rendimiento, podríamos hacer commit inmediato
+    eventBus.on(DocumentEventType.DOCUMENT_SAVED, async (_data: { documentId: string }) => {      // En modo de alto rendimiento, podríamos hacer commit inmediato
       if (this.energyMode === 'highPerformance' && !this.syncInProgress) {
         await this.commitLocalChanges().catch(error => {
           console.error('Error en commit automático tras guardado:', error);
@@ -477,9 +474,9 @@ export class SyncService {
   public getSyncStatus(): {
     initialized: boolean;
     hasRemote: boolean;
-    remote?: string;
-    branch?: string;
-    lastSync?: string;
+    remote?: string | undefined;
+    branch?: string | undefined;
+    lastSync?: string | undefined;
     autoSyncEnabled: boolean;
     syncInProgress: boolean;
   } {
@@ -493,7 +490,6 @@ export class SyncService {
       syncInProgress: this.syncInProgress
     };
   }
-
   /**
    * Libera recursos
    */

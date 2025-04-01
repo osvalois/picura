@@ -171,6 +171,7 @@ contextBridge.exposeInMainWorld('sustainability', {
       }
     };
     
-    return throttleValues[mode]?.[operationType] ?? throttleValues.standard[operationType];
+    return throttleValues[mode]?.[operationType] ?? 
+  (throttleValues as {standard: Record<string, number>}).standard[operationType];
   }
 });

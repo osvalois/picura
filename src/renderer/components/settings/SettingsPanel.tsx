@@ -3,7 +3,6 @@ import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { useSustainabilityContext } from '../../contexts/SustainabilityContext';
 import { UserPreferences, UserProfileType } from '../../../shared/types/User';
 import { EnergyMode } from '../../../shared/types/SustainabilityMetrics';
-import { AppConfig } from '../../../shared/types/AppConfig';
 
 interface SettingsPanelProps {
   onClose: () => void;

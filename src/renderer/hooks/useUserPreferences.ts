@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { UserPreferences, UserProfileType } from '../../shared/types/User';
 import { DEFAULT_USER_PREFERENCES } from '../../config/defaults';
+import { ElectronAPI } from '@/shared/types/Commons';
+
+
+// Declare global window with electronAPI property
+declare global {
+  interface Window {
+    electronAPI?: ElectronAPI;
+  }
+}
 
 /**
  * Hook personalizado para gestionar preferencias de usuario con enfoque en sostenibilidad
@@ -20,17 +29,32 @@ export function useUserPreferences() {
       try {
         setIsLoading(true);
         
-        if (window.electronAPI && window.electronAPI.getUserPreferences) {
-          const prefs = await window.electronAPI.getUserPreferences();
-          setPreferences(prefs);
+        // Verificar que la API existe y tiene el método requerido
+        if (window.electronAPI) {
+          try {
+            const prefs = await window.electronAPI.getUserPreferences();
+            if (prefs) {
+              setPreferences(prefs);
+            }
+          } catch (prefErr) {
+            console.error('Error fetching preferences:', prefErr);
+            // Fallback a valores predeterminados si hay error
+            setPreferences(DEFAULT_USER_PREFERENCES);
+          }
           
           // Si hay perfil de usuario cargado
-          if (window.electronAPI.getUserProfile) {
+          try {
             const profile = await window.electronAPI.getUserProfile();
-            setProfileType(profile.profileType);
+            if (profile && profile.profileType) {
+              setProfileType(profile.profileType);
+            }
+          } catch (profileErr) {
+            console.error('Error fetching user profile:', profileErr);
+            // Mantener el perfil por defecto
           }
         } else {
           // Fallback a valores predeterminados
+          console.warn('No electronAPI available, using default preferences');
           setPreferences(DEFAULT_USER_PREFERENCES);
         }
       } catch (err) {
@@ -58,7 +82,7 @@ export function useUserPreferences() {
         ...newPreferences
       };
       
-      if (window.electronAPI && window.electronAPI.updateUserPreferences) {
+      if (window.electronAPI) {
         await window.electronAPI.updateUserPreferences(updatedPrefs);
         setPreferences(updatedPrefs);
         return true;
@@ -66,6 +90,7 @@ export function useUserPreferences() {
       
       // Actualiza estado aunque no se guarde
       setPreferences(updatedPrefs);
+      console.warn('No electronAPI available, preferences updated in memory only');
       return false;
     } catch (err) {
       console.error('Error updating preferences:', err);
@@ -83,7 +108,7 @@ export function useUserPreferences() {
     try {
       setIsLoading(true);
       
-      if (window.electronAPI && window.electronAPI.updateUserProfile) {
+      if (window.electronAPI) {
         await window.electronAPI.updateUserProfile({ profileType: newProfileType });
         setProfileType(newProfileType);
         
@@ -96,6 +121,7 @@ export function useUserPreferences() {
       
       // Actualiza estado local aunque no se guarde
       setProfileType(newProfileType);
+      console.warn('No electronAPI available, profile type updated in memory only');
       return false;
     } catch (err) {
       console.error('Error updating profile:', err);
@@ -114,8 +140,10 @@ export function useUserPreferences() {
       // Obtiene preferencias predeterminadas según perfil
       const defaultPrefs = getDefaultPreferencesForProfile(profileType);
       
-      if (window.electronAPI && window.electronAPI.updateUserPreferences) {
+      if (window.electronAPI) {
         await window.electronAPI.updateUserPreferences(defaultPrefs);
+      } else {
+        console.warn('No electronAPI available, preferences reset in memory only');
       }
       
       setPreferences(defaultPrefs);

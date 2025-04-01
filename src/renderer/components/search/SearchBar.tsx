@@ -1,7 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { SearchOptions } from '../../../shared/types/SearchTypes';
+import { SearchOptions, SearchFilter } from '../../../shared/types/SearchTypes';
 import { useSustainabilityContext } from '../../contexts/SustainabilityContext';
-import { debounce } from '../../utils/performanceUtils';
+
+// Create a custom debounce function with cancel support
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): T & { cancel: () => void } {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  
+  const debounced = function(this: any, ...args: Parameters<T>) {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => {
+      func.apply(this, args);
+      timeout = null;
+    }, wait);
+  } as T & { cancel: () => void };
+  
+  debounced.cancel = function() {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+  };
+  
+  return debounced;
+}
 
 interface SearchBarProps {
   onSearch: (query: string, options: SearchOptions) => void;
@@ -11,6 +37,8 @@ interface SearchBarProps {
   placeholder?: string;
   showFilters?: boolean;
 }
+
+type EnergyMode = 'highPerformance' | 'standard' | 'lowPower' | 'ultraSaving';
 
 /**
  * Barra de búsqueda con optimizaciones de sostenibilidad
@@ -27,7 +55,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   // Estados
   const [query, setQuery] = useState(initialQuery);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [filters, setFilters] = useState<SearchOptions['filters']>([]);
+  const [filters, setFilters] = useState<SearchFilter[]>([]);
   const [sortBy, setSortBy] = useState<SearchOptions['sortBy']>('relevance');
   const [sortDirection, setSortDirection] = useState<SearchOptions['sortDirection']>('desc');
   const [exactMatch, setExactMatch] = useState(false);
@@ -43,15 +71,15 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const { currentEnergyMode } = useSustainabilityContext();
   
   // Determina el retraso de búsqueda según modo de energía
-  const getDebounceDelay = useCallback(() => {
-    const delays = {
+  const getDebounceDelay = useCallback((): number => {
+    const delays: Record<EnergyMode, number> = {
       highPerformance: 100,  // 100ms
       standard: 300,         // 300ms
       lowPower: 500,         // 500ms
       ultraSaving: 1000      // 1s
     };
     
-    return delays[currentEnergyMode] || delays.standard;
+    return delays[currentEnergyMode as EnergyMode] || delays.standard;
   }, [currentEnergyMode]);
   
   // Búsqueda con debounce para optimizar rendimiento
@@ -69,7 +97,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       if (searchInTags) searchFields.push('tags');
       
       const options: SearchOptions = {
-        filters,
+        filters: [...filters], // Shallow copy to ensure it's a new array
         sortBy,
         sortDirection,
         exactMatch,
@@ -128,7 +156,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       if (searchInTags) searchFields.push('tags');
       
       const options: SearchOptions = {
-        filters,
+        filters: [...filters], // Shallow copy to ensure it's a new array
         sortBy,
         sortDirection,
         exactMatch,
@@ -184,55 +212,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showFilterPanel]);
-  
-  // Añade filtro de fecha
-  const addDateFilter = (startDate: Date, endDate: Date) => {
-    // Elimina filtros de fecha existentes
-    const existingFilters = filters?.filter(f => f.type !== 'date') || [];
-    
-    // Añade nuevo filtro de fecha
-    setFilters([
-      ...existingFilters,
-      {
-        type: 'date',
-        value: [startDate, endDate]
-      }
-    ]);
-    
-    // Aplica búsqueda inmediatamente si hay query
-    if (query.trim()) {
-      handleSearchClick();
-    }
-  };
-  
-  // Añade filtro de etiqueta
-  const addTagFilter = (tag: string) => {
-    // Verifica si ya existe
-    const tagFilterIndex = filters?.findIndex(f => 
-      f.type === 'tag' && 
-      (f.value === tag || (Array.isArray(f.value) && f.value.includes(tag)))
-    );
-    
-    let newFilters = [...(filters || [])];
-    
-    if (tagFilterIndex !== -1 && tagFilterIndex !== undefined) {
-      // Ya existe, lo elimina
-      newFilters.splice(tagFilterIndex, 1);
-    } else {
-      // No existe, lo añade
-      newFilters.push({
-        type: 'tag',
-        value: tag
-      });
-    }
-    
-    setFilters(newFilters);
-    
-    // Aplica búsqueda inmediatamente si hay query
-    if (query.trim()) {
-      handleSearchClick();
-    }
-  };
   
   // Elimina todos los filtros
   const clearFilters = () => {
@@ -427,7 +406,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
             </div>
             
             {/* Filtros aplicados */}
-            {filters && filters.length > 0 && (
+            {filters.length > 0 && (
               <div className="form-group">
                 <p className="block text-xs text-gray-700 dark:text-gray-300 mb-1">Filtros aplicados</p>
                 <div className="flex flex-wrap gap-1">

@@ -3,8 +3,8 @@ import { EnergyMode, SustainabilityMetrics } from '../../../shared/types/Sustain
 
 interface SustainabilityIndicatorProps {
   metrics?: SustainabilityMetrics;
-  mode?: string;
-  onModeChange?: (mode: string) => void;
+  mode?: EnergyMode;
+  onModeChange?: (mode: EnergyMode) => void;
   showDetailed?: boolean;
   variant?: 'compact' | 'standard' | 'detailed';
   className?: string;
@@ -23,7 +23,6 @@ const SustainabilityIndicator: React.FC<SustainabilityIndicatorProps> = ({
   mode,
   energyMode,
   onModeChange,
-  showDetailed = false,
   variant = 'standard',
   className = '',
   batteryLevel,
@@ -68,13 +67,13 @@ const SustainabilityIndicator: React.FC<SustainabilityIndicatorProps> = ({
     setShowModePanel(prev => !prev);
   }, []);
   
-  // Cambiar modo de energía y cerrar panel
-  const handleModeChange = useCallback((newMode: string) => {
-    if (onModeChange) {
-      onModeChange(newMode);
-    }
-    setShowModePanel(false);
-  }, [onModeChange]);
+    // Cambiar modo de energía y cerrar panel
+    const handleModeChange = useCallback((newMode: EnergyMode) => {
+      if (onModeChange) {
+        onModeChange(newMode);
+      }
+      setShowModePanel(false);
+    }, [onModeChange]);
   
   // Usar métricas proporcionadas o las predeterminadas
   const currentMetrics = metrics || defaultMetrics;

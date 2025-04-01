@@ -38,8 +38,9 @@ const EnergyModeSelector: React.FC<EnergyModeSelectorProps> = ({
       
       return () => clearTimeout(timer);
     }
+    
+    return undefined; // Explicitly return undefined for the false case
   }, [showConfirmation]);
-  
   // Definición de modos de energía
   const energyModes: {
     id: EnergyMode;
@@ -100,8 +101,7 @@ const EnergyModeSelector: React.FC<EnergyModeSelectorProps> = ({
   ];
   
   // Encuentra el modo actual
-  const currentModeData = energyModes.find(mode => mode.id === currentMode) || energyModes[1];
-  
+  const currentModeData = energyModes.find(mode => mode.id === currentMode)!;  
   // Determina si debe mostrar sugerencia basada en batería
   const shouldShowBatteryWarning = 
     batteryLevel !== undefined && 

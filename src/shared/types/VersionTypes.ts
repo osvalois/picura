@@ -21,7 +21,7 @@ export interface VersionInfo {
   version: number;
   timestamp: string;
   message: string;
-  author?: string;
+  author?: string | undefined;
   changes: VersionChange[];
   sustainabilityMetrics: {
     diffSize: number;
@@ -29,6 +29,7 @@ export interface VersionInfo {
     storageImpact: number;
   };
 }
+
 
 export interface VersionCommitOptions {
   message?: string;
@@ -85,7 +86,7 @@ export interface GitSyncStatus {
   lastSyncTime?: string;
   activeBranch?: string;
   availableBranches?: string[];
-  remoteUrl?: string;
+  remoteUrl?: string | undefined;
   remoteBranch?: string;
   errorMessage?: string;
 }

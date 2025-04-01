@@ -56,16 +56,15 @@ const AdvancedEditor: React.FC<AdvancedEditorProps> = ({
     // Busca encabezados (# Heading) para el esquema
     const headingRegex = /^(#{1,6})\s+(.+)$/gm;
     const headers: {level: number, text: string, line: number}[] = [];
-    let match;
-    let lineCount = 0;
+    let match: RegExpExecArray | null;
     
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       // Resetea regex para buscar en cada línea
       headingRegex.lastIndex = 0;
-      match = headingRegex.exec(line);
-      if (match) {
+      match = headingRegex.exec(line || "");
+      if (match && match[1] && match[2]) {
         headers.push({
           level: match[1].length,
           text: match[2],
@@ -93,7 +92,7 @@ const AdvancedEditor: React.FC<AdvancedEditorProps> = ({
 
         // Usamos procesamiento por etapas para mejor rendimiento
         const processCodeBlocks = () => {
-          return safeText.replace(/```([^\n]*)\n([\s\S]*?)```/g, (match, language, code) => {
+          return safeText.replace(/```([^\n]*)\n([\s\S]*?)```/g, (_matchStr, language, code) => {
             return `<pre class="bg-gray-50 dark:bg-gray-800 p-4 rounded-md my-4 overflow-x-auto ${language ? `language-${language}` : ''}"><code>${code}</code></pre>`;
           });
         };
@@ -405,7 +404,9 @@ const AdvancedEditor: React.FC<AdvancedEditorProps> = ({
     const text = textarea.value.substring(0, textarea.selectionStart);
     const lines = text.split('\n');
     const line = lines.length;
-    const column = lines[lines.length - 1].length + 1;
+    
+    // Check if the last line exists before accessing it
+    const column = lines.length > 0 && lines[lines.length - 1] !== undefined ? (lines[lines.length - 1] || "").length + 1 : 1;
     
     setCursorPosition({ line, column });
     updateSelectionStats();
@@ -422,7 +423,7 @@ const AdvancedEditor: React.FC<AdvancedEditorProps> = ({
     // Calcula la posición del cursor
     for (let i = 0; i < lineNumber - 1; i++) {
       if (i < lines.length) {
-        position += lines[i].length + 1; // +1 para el carácter de nueva línea
+        position += (lines[i]?.length || 0) + 1; // +1 para el carácter de nueva línea
       }
     }
     

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { EnergyMode } from '../../../../shared/types/SustainabilityMetrics';
 
 interface ToolbarProps {
-  documentId?: string;
-  documentTitle?: string;
-  onSave: () => void;
+  documentId?: string | undefined;
+  documentTitle?: string | undefined;
+  onSave: (isAutoSave?: boolean) => Promise<void>;
   isSaving: boolean;
-  editorMode: string;
+  editorMode: 'basic' | 'standard' | 'advanced';
   onEditorModeChange: (mode: 'basic' | 'standard' | 'advanced') => void;
   readOnly: boolean;
+  saveStatus: 'idle' | 'pending' | 'success' | 'error';
+  documentSize?: 'small' | 'medium' | 'large' | 'very_large' | undefined;
 }
 
 /**
@@ -22,7 +23,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isSaving,
   editorMode,
   onEditorModeChange,
-  readOnly
+  readOnly,
+  saveStatus,
+  documentSize
 }) => {
   const [showModeSelector, setShowModeSelector] = useState(false);
   
@@ -32,6 +35,13 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <div className="document-title flex-grow max-w-md truncate text-gray-800 dark:text-gray-200 font-medium">
         {documentTitle || 'Documento sin título'}
         {documentId && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{documentId.substring(0, 8)}</span>}
+        {documentSize && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+            {documentSize === 'very_large' ? 'Documento muy grande' :
+             documentSize === 'large' ? 'Documento grande' :
+             documentSize === 'medium' ? 'Documento mediano' : ''}
+          </span>
+        )}
       </div>
       
       {/* Acciones centrales */}
@@ -90,17 +100,36 @@ const Toolbar: React.FC<ToolbarProps> = ({
       {/* Acciones de documento */}
       <div className="flex space-x-2">
         <button
-          onClick={onSave}
+          onClick={() => onSave()}
           disabled={readOnly || isSaving}
-          className="px-3 py-1 rounded text-sm bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 flex items-center"
+          className={`px-3 py-1 rounded text-sm ${
+            saveStatus === 'success' ? 'bg-green-600' :
+            saveStatus === 'error' ? 'bg-red-500' :
+            saveStatus === 'pending' ? 'bg-yellow-500' :
+            'bg-green-500 hover:bg-green-600'
+          } text-white disabled:opacity-50 flex items-center`}
         >
-          {isSaving ? (
+          {isSaving || saveStatus === 'pending' ? (
             <>
               <span className="flex h-4 w-4 relative mr-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-50"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
               </span>
               Guardando
+            </>
+          ) : saveStatus === 'success' ? (
+            <>
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Guardado
+            </>
+          ) : saveStatus === 'error' ? (
+            <>
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Error
             </>
           ) : (
             'Guardar'

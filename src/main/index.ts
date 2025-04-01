@@ -181,12 +181,25 @@ async function setupIpcHandlers() {
     const docServiceModule = await import('../services/document/DocumentService');
     const { documentService } = docServiceModule;
     
-    // Inicializa DocumentService
-    try {
-      await documentService.initialize();
-      console.log('DocumentService inicializado correctamente');
-    } catch (error) {
-      console.error('Error al inicializar DocumentService:', error);
+    // Inicializa DocumentService si aún no está inicializado
+    if (!documentService.isInitialized()) {
+      try {
+        await documentService.initialize();
+        console.log('DocumentService inicializado correctamente');
+      } catch (error) {
+        console.error('Error al inicializar DocumentService:', error);
+        
+        // Intento adicional de inicialización
+        console.log('Reintentando inicialización de DocumentService...');
+        try {
+          await documentService.initialize();
+          console.log('DocumentService inicializado en el segundo intento');
+        } catch (retryError) {
+          console.error('Error en segundo intento de inicialización:', retryError);
+        }
+      }
+    } else {
+      console.log('DocumentService ya está inicializado');
     }
     
     // Configura servicios para IPC con manejo de errores mejorado
@@ -310,7 +323,7 @@ process.on('uncaughtException', (error) => {
   // Registra y notifica sobre errores no capturados
   eventBus.emit(SystemEventType.SYSTEM_ERROR, {
     message: error.message,
-    stack: error.stack,
+    stack: error.stack!,  // Add the ! non-null assertion
     timestamp: new Date().toISOString()
   });
 });

@@ -1,4 +1,3 @@
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 import App from './components/App';
@@ -65,7 +64,12 @@ window.addEventListener('error', (event) => {
 
 // Detección de batería para ajuste automático
 if ('getBattery' in navigator) {
-  navigator.getBattery().then(battery => {
+  // Use type assertion to tell TypeScript about this API
+  (navigator as any).getBattery().then((battery: { 
+    charging: boolean; 
+    level: number; 
+    addEventListener: (event: string, handler: () => void) => void;
+  }) => {
     const updateBatteryStatus = () => {
       // Envía estado de batería al proceso principal
       if (window.electronAPI && window.electronAPI.updateBatteryStatus) {

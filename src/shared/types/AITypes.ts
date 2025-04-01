@@ -94,8 +94,8 @@ export interface AIUsageStats {
 }
 
 export interface AIContext {
-  documentId?: string;
-  documentTitle?: string;
+  documentId?: string;  // Marked as optional
+  documentTitle?: string;  // Marked as optional
   precedingText: string;
   followingText: string;
   metadata?: Record<string, any>;

@@ -82,7 +82,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               .replace(/^- (.+)$/gm, '<li class="ml-6 list-disc my-1">$1</li>')
               .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-6 list-decimal my-1">$2</li>')
               .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-red-600 dark:text-red-400 text-sm">$1</code>')
-              .replace(/```([\s\S]*?)```/g, (match, p1) => {
+              .replace(/```([\s\S]*?)```/g, (_, p1) => {
                 return `<pre class="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-x-auto my-4"><code>${p1.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
               });
             
@@ -106,7 +106,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               .replace(/^- (.+)$/gm, '• $1<br />')
               .replace(/^(\d+)\. (.+)$/gm, '$1. $2<br />')
               .replace(/`([^`]+)`/g, '<code>$1</code>')
-              .replace(/```([\s\S]*?)```/g, (match, p1) => {
+              .replace(/```([\s\S]*?)```/g, (_, p1) => {
                 return `<pre>${p1.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
               });
           }
@@ -159,15 +159,15 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   // Extrae encabezados para crear esquema de navegación
   const extractOutline = (content: string) => {
     const headingRegex = /^(#{1,3})\s+(.+)$/gm;
-    const headings: {id: string, level: number, text: string}[] = [];
+    const headings: { id: string; level: number; text: string }[] = [];
     
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = headingRegex.exec(content)) !== null) {
-      const level = match[1].length;
-      const text = match[2];
-      const id = `heading-${text.toLowerCase().replace(/\s+/g, '-')}`;
+      // Assert that the groups are defined.
+      const level = match[1]!.length;
+      const text = match[2]!;
       
-      // Solo incluir hasta nivel 3 para el esquema
+      const id = `heading-${text.toLowerCase().replace(/\s+/g, '-')}`;
       if (level <= 3) {
         headings.push({ id, level, text });
       }
@@ -207,8 +207,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 {document.metadata.wordCount && (
                   <div>{document.metadata.wordCount} palabras</div>
                 )}
-                {document.metadata.readTime && (
-                  <div>~{document.metadata.readTime} min de lectura</div>
+                {document.metadata.readingTime && (
+                  <div>~{document.metadata.readingTime} min de lectura</div>
                 )}
               </div>
               {document.tags && document.tags.length > 0 && (
@@ -340,13 +340,13 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <span>Modo visualización: {renderQuality}</span>
         </div>
         
-        {document.metadata.sustainabilityMetrics && (
+        {document.metadata.sustainability && (
           <div className="flex items-center space-x-2">
             <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             <span title="Tamaño optimizado">
-              {document.metadata.sustainabilityMetrics.compressionRatio.toFixed(1)}x ahorro
+              {document.metadata.sustainability.contentReuseFactor.toFixed(1)}x ahorro
             </span>
           </div>
         )}

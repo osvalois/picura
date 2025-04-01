@@ -3,9 +3,9 @@ import { SustainabilityProvider, useSustainabilityContext } from '../contexts/Su
 import { DocumentProvider, useDocumentContext } from '../contexts/DocumentContext';
 import NavigationSidebar from './navigation/NavigationSidebar';
 import SustainabilityIndicator from './common/SustainabilityIndicator';
-import { EnergyMode } from '../../shared/types/SustainabilityMetrics';
 import { Document } from '../../shared/types/Document';
 import { DocumentAPI } from '../utils/ipcAPI';
+import { EnergyMode } from '../../shared/types/SustainabilityMetrics';
 
 // Carga diferida para mejorar rendimiento inicial
 const EditorContainer = lazy(() => import('./editor/EditorContainer'));
@@ -51,7 +51,6 @@ const AppContent: React.FC = () => {
     createDocument, 
     openFile,
     openFolder,
-    openSpecificFile,
     setActiveDocument,
     isLoading: documentLoading 
   } = useDocumentContext();
@@ -69,44 +68,45 @@ const AppContent: React.FC = () => {
   const [isAppReady, setIsAppReady] = useState(false);
   
   // Inicialización de la aplicación y carga de datos
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        const docs = await listDocuments();
-        setDocuments(docs);
-        
-        // Analiza carpetas de documentos de forma optimizada
-        const pathCountMap = new Map<string, number>();
-        docs.forEach(doc => {
-          const path = doc.path;
-          pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
-        });
-        
-        const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
-          const segments = path.split('/').filter(Boolean);
-          const name = segments.length > 0 ? segments[segments.length - 1] : 'Raíz';
-          return { path, name, count };
-        });
-        
-        setFolders(folderData);
-        
-        // Indica que la aplicación está lista
-        setIsAppReady(true);
-      } catch (error) {
-        console.error("Error initializing app data:", error);
-        // Aun con error, marcamos como listo para mostrar la UI
-        setIsAppReady(true);
-      }
-    };
-    
-    initializeApp();
-    
-    // Efecto de limpieza en caso de desmontaje
-    return () => {
-      // Limpieza si es necesario
-    };
-  }, [listDocuments]);
+useEffect(() => {
+  const initializeApp = async () => {
+    try {
+      const docs = await listDocuments();
+      setDocuments(docs);
+      
+      // Analiza carpetas de documentos de forma optimizada
+      const pathCountMap = new Map<string, number>();
+      docs.forEach(doc => {
+        const path = doc.path;
+        pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+      });
+      
+      // Definimos el tipo explícitamente para asegurar que name sea siempre string
+      const folderData: Array<{ path: string; name: string; count: number }> = Array.from(pathCountMap.entries()).map(([path, count]) => {
+        const segments = path.split('/').filter(Boolean);
+        // Aseguramos que name sea siempre un string
+        const name = segments.length > 0 ? (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+        return { path, name, count };
+      });
+      
+      setFolders(folderData);
+      
+      // Indica que la aplicación está lista
+      setIsAppReady(true);
+    } catch (error) {
+      console.error("Error initializing app data:", error);
+      // Aun con error, marcamos como listo para mostrar la UI
+      setIsAppReady(true);
+    }
+  };
   
+  initializeApp();
+  
+  // Efecto de limpieza en caso de desmontaje
+  return () => {
+    // Limpieza si es necesario
+  };
+}, [listDocuments]);
   // Manejadores de eventos optimizados con useCallback para memoización
   const handleDocumentSelect = useCallback(async (id: string) => {
     try {
@@ -164,31 +164,43 @@ const AppContent: React.FC = () => {
     }
   }, [createDocument, setActiveDocument]);
   
-  // Función auxiliar memoizada para actualizar carpetas
-  const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) => {
-    // Uso de Map para optimizar el conteo y evitar múltiples iteraciones
-    const pathCountMap = new Map<string, number>();
-    docs.forEach(doc => {
-      const path = doc.path;
-      pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
-    });
-    
-    // Incluir también carpetas nuevas con conteo inicial 0
-    newFolders.forEach(path => {
-      if (!pathCountMap.has(path)) {
-        pathCountMap.set(path, 0);
-      }
-    });
-    
-    const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+// Función auxiliar memoizada para actualizar carpetas - CORREGIDA
+const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) => {
+  // Uso de Map para optimizar el conteo y evitar múltiples iteraciones
+  const pathCountMap = new Map<string, number>();
+  docs.forEach(doc => {
+    const path = doc.path;
+    pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+  });
+  
+  // Incluir también carpetas nuevas con conteo inicial 0
+  newFolders.forEach(path => {
+    if (!pathCountMap.has(path)) {
+      pathCountMap.set(path, 0);
+    }
+  });
+  
+  // Definir explícitamente el tipo de folderData
+  const folderData: Array<{ path: string; name: string; count: number }> = 
+    Array.from(pathCountMap.entries()).map(([path, count]) => {
       const segments = path.split('/').filter(Boolean);
-      const name = segments.length > 0 ? segments[segments.length - 1] : 'Raíz';
+      
+      // Garantizar que name siempre sea un string válido
+      let name: string;
+      if (segments.length > 0) {
+        // Si hay segmentos, tomamos el último y nos aseguramos que no sea undefined
+        const lastSegment = segments[segments.length - 1];
+        name = lastSegment !== undefined ? lastSegment : 'Sin nombre';
+      } else {
+        // Si no hay segmentos, usamos 'Raíz' como valor predeterminado
+        name = 'Raíz';
+      }
+      
       return { path, name, count };
     });
-    
-    setFolders(folderData);
-  }, []);
   
+  setFolders(folderData);
+}, []);
   const handleImportFiles = useCallback(async () => {
     try {
       const importedDocs = await DocumentAPI.importFiles();
@@ -258,7 +270,7 @@ const AppContent: React.FC = () => {
   }, [openFolder, listDocuments, updateFolders]);
   
   // Maneja el cambio de modo de energía - memoizado para evitar re-renderizados
-  const handleSetEnergyMode = useCallback((mode: string) => {
+  const handleSetEnergyMode = useCallback((mode: EnergyMode) => {
     setEnergyMode(mode);
   }, [setEnergyMode]);
   
@@ -292,24 +304,27 @@ const AppContent: React.FC = () => {
   // Detecta si la app está cargando
   const isLoading = documentLoading || !isAppReady;
 
-  // Renderizado condicional para mostrar el asistente de IA
   const renderAIAssistant = useCallback(() => {
-    if (!showAI) return null;
+    if (!showAI || !currentDocument?.id) return null;
     
     return (
       <div className="fixed right-4 bottom-16 z-50 w-80 h-96 shadow-lg rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out">
         <Suspense fallback={<LoadingFallback />}>
           <AIAssistant 
-            documentId={currentDocument?.id}
-            content={currentDocument?.content || ''}
+            documentId={currentDocument.id}
+            documentContent={currentDocument.content || ''}
             onClose={handleToggleAI}
             energyMode={currentEnergyMode}
+            documentTitle={currentDocument.title || ''}
+            editorContent={currentDocument.content || ''}
+            cursorPosition={0}
+            onSuggestionApply={(suggestion) => console.log('Sugerencia aplicada:', suggestion)}
+            enabled={true}
           />
         </Suspense>
       </div>
     );
   }, [showAI, currentDocument, currentEnergyMode, handleToggleAI]);
-
   // Renderiza la pantalla inicial de carga
   if (!isAppReady) {
     return (

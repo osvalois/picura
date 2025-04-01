@@ -212,9 +212,10 @@ export class EventBus {
     // Elimina los handlers de una sola vez, en orden inverso para no afectar índices
     if (oncesIndexes.length > 0) {
       for (let i = oncesIndexes.length - 1; i >= 0; i--) {
+        // @ts-ignore - Sabemos que este índice existe porque estamos iterando dentro del rango
         const indexToRemove = oncesIndexes[i];
+        // @ts-ignore - Sabemos que indexToRemove es un número válido
         const handlerToRemove = handlersToExecute[indexToRemove];
-        
         const originalIndex = handlers.indexOf(handlerToRemove);
         if (originalIndex !== -1) {
           handlers.splice(originalIndex, 1);

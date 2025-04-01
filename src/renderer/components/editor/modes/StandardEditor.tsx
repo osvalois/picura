@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { EnergyMode } from '../../../../shared/types/SustainabilityMetrics';
 import { debounce } from '../../../utils/performanceUtils';
 
@@ -296,9 +296,11 @@ const StandardEditor: React.FC<StandardEditorProps> = ({
           
           // Posiciona cursor al final de la sugerencia
           setTimeout(() => {
-            const newPos = pos - lastWord.length + replacement.length;
-            textarea.selectionStart = textarea.selectionEnd = newPos;
-            textarea.focus();
+            if (replacement) {
+              const newPos = pos - lastWord.length + replacement.length;
+              textarea.selectionStart = textarea.selectionEnd = newPos;
+              textarea.focus();
+            }
           }, 0);
         }
         
@@ -367,10 +369,10 @@ const StandardEditor: React.FC<StandardEditorProps> = ({
     const textarea = editorRef.current;
     const text = textarea.value.substring(0, textarea.selectionStart);
     const lines = text.split('\n');
-    const line = lines.length;
-    const column = lines[lines.length - 1].length + 1;
+    const lastLine = lines[lines.length - 1] || '';
+    const column = lastLine.length + 1;
     
-    setCursorPosition({ line, column });
+    setCursorPosition({ line: lines.length, column });
     updateSelectionStats();
   };
   

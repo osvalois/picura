@@ -1,7 +1,6 @@
 import { Document } from '../../shared/types/Document';
-import { SearchResult, SearchOptions, SearchStats } from '../../shared/types/SearchTypes';
+import { SearchResult, SearchOptions } from '../../shared/types/SearchTypes';
 import { documentService } from '../document/DocumentService';
-import { EventBus } from '../../core/events/EventBus';
 import { eventBus } from '../../core/events/EventBus';
 import { UIEventType, DocumentEventType } from '../../core/events/EventTypes';
 import { APP_CONSTANTS } from '../../config/defaults';
@@ -284,21 +283,38 @@ export class SearchService {
     
     // Encuentra la intersección de todos los conjuntos
     // (documentos que contienen todos los tokens)
-    let result: string[];
-    if (docSets.length === 1) {
+    let result: string[] = [];
+  
+    // Add a check to ensure docSets is not empty
+    if (docSets.length === 0) {
+      // Handle the empty case - return empty array or other appropriate value
+      result = [];
+    } else if (docSets.length === 1 && docSets[0]) {
       // Si solo hay un token, usa esos documentos
       result = Array.from(docSets[0]);
     } else {
-      // Intersección de documentos que contienen todos los tokens
-      const intersection = new Set(docSets[0]);
-      for (let i = 1; i < docSets.length; i++) {
-        for (const docId of intersection) {
-          if (!docSets[i].has(docId)) {
-            intersection.delete(docId);
+      // Ensure first set exists before creating intersection
+      if (docSets[0]) {
+        // Intersección de documentos que contienen todos los tokens
+        const intersection = new Set(docSets[0]);
+        
+        for (let i = 1; i < docSets.length; i++) {
+          // Check if the current set exists
+          if (docSets[i]) {
+            for (const docId of intersection) {
+              if (!docSets[i]!.has(docId)) {
+                intersection.delete(docId);
+              }
+            }
+          } else {
+            // Handle the case where a set is undefined
+            intersection.clear();
+            break;
           }
         }
+        
+        result = Array.from(intersection);
       }
-      result = Array.from(intersection);
     }
     
     // Filtra por ruta si se especificó

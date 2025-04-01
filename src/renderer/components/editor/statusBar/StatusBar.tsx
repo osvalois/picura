@@ -20,21 +20,21 @@ interface StatusBarProps {
     cpu?: {
       usage: number;
       cores: number;
-    };
+    } | undefined;
     memory?: {
       usagePercent: number;
       usageRaw: number;
       total: number;
-    };
+    } | undefined;
     battery?: {
       level: number;
       isCharging: boolean;
-    };
+    } | undefined;
     energyImpact?: {
       current: number;
       average: number;
-    };
-  };
+    } | undefined;
+  } | undefined;
   showEnergyMetrics: boolean;
 }
 
@@ -59,6 +59,9 @@ const StatusBar: React.FC<StatusBarProps> = ({
       const timer = setTimeout(() => setAnimateMetrics(false), 1000);
       return () => clearTimeout(timer);
     }
+    
+    // Add an explicit return for the case when sustainabilityMetrics is falsy
+    return undefined;
   }, [sustainabilityMetrics?.cpu?.usage, sustainabilityMetrics?.memory?.usagePercent]);
   
   // Maneja el cambio de modo de energía
@@ -75,13 +78,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
   const formatValue = (value: number | undefined) => {
     if (value === undefined) return 'N/A';
     return value.toFixed(1);
-  };
-  
-  // Formatea tamaño para mostrar
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
   
   // Determina nivel de impacto energético
@@ -109,49 +105,6 @@ const StatusBar: React.FC<StatusBarProps> = ({
       default:
         return 'Estándar';
     }
-  };
-  
-  // Genera color para el modo de energía
-  const getEnergyModeColor = (mode: EnergyMode): string => {
-    switch (mode) {
-      case 'highPerformance':
-        return 'text-purple-600 dark:text-purple-400';
-      case 'standard':
-        return 'text-blue-600 dark:text-blue-400';
-      case 'lowPower':
-        return 'text-green-600 dark:text-green-400';
-      case 'ultraSaving':
-        return 'text-green-700 dark:text-green-300';
-      default:
-        return 'text-gray-600 dark:text-gray-400';
-    }
-  };
-  
-  // Genera indicador de optimización
-  const getOptimizationIndicator = (level: number): JSX.Element => {
-    let color = 'bg-yellow-500';
-    
-    if (level >= 95) {
-      color = 'bg-green-500';
-    } else if (level >= 80) {
-      color = 'bg-green-400';
-    } else if (level >= 60) {
-      color = 'bg-yellow-400';
-    } else if (level < 60) {
-      color = 'bg-red-500';
-    }
-    
-    return (
-      <div className="flex items-center space-x-1" title={`Nivel de optimización: ${level.toFixed(0)}%`}>
-        <div className="h-2 w-12 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div 
-            className={`h-full ${color} transition-all duration-300`} 
-            style={{ width: `${Math.min(100, level)}%` }}
-          ></div>
-        </div>
-        <span className="text-xs text-gray-600 dark:text-gray-400">{level.toFixed(0)}%</span>
-      </div>
-    );
   };
   
   // Obtiene el ícono según el nivel de energía
@@ -277,8 +230,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
             <EnergyModeSelector 
               currentMode={energyMode} 
               onChange={handleEnergyModeChange} 
-              batteryLevel={sustainabilityMetrics?.battery?.level} 
-              isCharging={sustainabilityMetrics?.battery?.isCharging} 
+              batteryLevel={sustainabilityMetrics?.battery?.level || 0} 
+              isCharging={sustainabilityMetrics?.battery?.isCharging || false} 
               compact={true}
             />
           </div>

@@ -177,10 +177,10 @@ export const DocumentAPI = {
     path?: string
   ) => {
     return api.document.create({
-      title,
-      initialContent,
-      metadata,
-      path
+      ...(title !== undefined && { title }),
+      ...(initialContent !== undefined && { initialContent }),
+      ...(metadata !== undefined && { metadata }),
+      ...(path !== undefined && { path })
     });
   },
 
@@ -202,7 +202,7 @@ export const DocumentAPI = {
     return api.document.update({
       id,
       changes,
-      options
+      ...(options !== undefined && { options })
     });
   },
 
@@ -215,7 +215,7 @@ export const DocumentAPI = {
   ) => {
     return api.document.delete({
       id,
-      options
+      ...(options !== undefined && { options })
     });
   },
 
@@ -295,7 +295,7 @@ export const DocumentAPI = {
   importFile: async (filePath: string, targetPath?: string) => {
     return api.document.importFile({
       filePath,
-      targetPath
+      ...(targetPath !== undefined && { targetPath })
     });
   },
   
@@ -440,7 +440,7 @@ export const VersionControlAPI = {
   commit: async (message: string, files?: string[]) => {
     return api.versionControl.commit({
       message,
-      files
+      ...(files !== undefined && { files })
     });
   },
 
@@ -477,8 +477,8 @@ export const VersionControlAPI = {
    */
   getHistory: async (path?: string, limit?: number) => {
     return api.versionControl.getHistory({
-      path,
-      limit
+      ...(path !== undefined && { path }),
+      ...(limit !== undefined && { limit })
     });
   },
 
@@ -615,10 +615,9 @@ export const AIAPI = {
   generateSummary: async (text: string, maxLength?: number) => {
     return api.ai.generateSummary({
       text,
-      maxLength
+      ...(maxLength !== undefined && { maxLength })
     });
   },
-
   /**
    * Traduce texto
    */
@@ -696,7 +695,7 @@ export const SyncAPI = {
   setRemote: async (url: string, token?: string) => {
     return api.sync.setRemote({
       url,
-      token
+      ...(token !== undefined && { token })
     });
   },
 

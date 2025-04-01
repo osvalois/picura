@@ -15,7 +15,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
     path?: string
   }) => {
     try {
-      const { title, initialContent, metadata, path } = args;
+      const { title, initialContent, path } = args;
       return await documentService.createDocument(title || "Untitled", initialContent || "", path);
     } catch (error) {
       console.error('Error creating document:', error);
@@ -55,7 +55,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
     options?: { immediate?: boolean }
   }) => {
     try {
-      const { id, options } = args;
+      const { id } = args;
       return await documentService.deleteDocument(id);
     } catch (error) {
       console.error(`Error deleting document ${args.id}:`, error);
@@ -64,7 +64,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Listar documentos
-  ipcMain.handle('document:list', async (_, folderPath?: string) => {
+  ipcMain.handle('document:list', async (_, _folderPath?: string) => {
     try {
       return await documentService.listDocuments();
     } catch (error) {

@@ -11,20 +11,20 @@ export interface SearchFilter {
 }
 
 export interface SearchOptions {
-  filters?: SearchFilter[];
-  sortBy?: 'relevance' | 'date' | 'title' | 'author';
-  sortDirection?: 'asc' | 'desc';
-  limit?: number;
-  offset?: number;
-  searchFields?: Array<'title' | 'content' | 'tags' | 'metadata'>;
-  exactMatch?: boolean;
-  caseSensitive?: boolean;
-  includeContent?: boolean;
-  highlightResults?: boolean;
-  smartSearch?: boolean; // Búsqueda semántica o con sinónimos
-  contentPreview?: boolean; // Incluir fragmento de texto con coincidencia
-  path?: string; // Ruta específica para buscar
-  includeTags?: boolean; // Incluir etiquetas en los resultados
+  filters?: SearchFilter[] | undefined;
+  sortBy?: 'relevance' | 'date' | 'title' | 'author' | undefined;
+  sortDirection?: 'asc' | 'desc' | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  searchFields?: Array<'title' | 'content' | 'tags' | 'metadata'> | undefined;
+  exactMatch?: boolean | undefined;
+  caseSensitive?: boolean | undefined;
+  includeContent?: boolean | undefined;
+  highlightResults?: boolean | undefined;
+  smartSearch?: boolean | undefined; // Búsqueda semántica o con sinónimos
+  contentPreview?: boolean | undefined; // Incluir fragmento de texto con coincidencia
+  path?: string | undefined; // Ruta específica para buscar
+  includeTags?: boolean | undefined; // Incluir etiquetas en los resultados
 }
 
 export interface SearchResult {

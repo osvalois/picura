@@ -5,7 +5,7 @@ import { app, dialog } from 'electron';
 import { Document, DocumentMetadata, DocumentVersion, MarkdownFormat } from '../../shared/types/Document';
 import { eventBus } from '../../core/events/EventBus';
 import { DocumentEventType } from '../../core/events/EventTypes';
-import { PATHS, APP_CONSTANTS } from '../../config/defaults';
+import { PATHS } from '../../config/defaults';
 
 /**
  * Servicio principal para gestión de documentos Markdown
@@ -219,7 +219,12 @@ export class DocumentService {
       return { documents: [], folders: [] };
     }
     
-    return this.importFolder(result.filePaths[0], '/', options);
+    if (result.filePaths[0]) {
+      return this.importFolder(result.filePaths[0], '/', options);
+    } else {
+      throw new Error("No file path selected");
+    }
+    
   }
   
   /**
@@ -243,6 +248,10 @@ export class DocumentService {
       const filePath = result.filePaths[0];
       
       // Verifica que el archivo exista y sea legible
+      if (filePath === undefined) {
+        throw new Error("La ruta del archivo no está definida");
+      }
+      
       try {
         const stats = await fs.promises.stat(filePath);
         if (!stats.isFile()) {
@@ -306,10 +315,15 @@ export class DocumentService {
       };
       
       // Importa la carpeta con los documentos
+      if (!rootFolder) {
+        throw new Error("La ruta de la carpeta raíz es obligatoria");
+      }
+      
+      // Importa la carpeta con los documentos
       const result2 = await this.importFolder(rootFolder, '/', importOptions);
       
       return {
-        rootFolder,
+        rootFolder, // Ahora TypeScript sabe que rootFolder es string
         documents: result2.documents,
         folders: result2.folders
       };
@@ -344,7 +358,7 @@ export class DocumentService {
       // Validación asíncrona en paralelo para optimizar tiempo
       const [fileStats] = await Promise.all([
         fs.promises.stat(normalizedPath).catch(err => {
-          throw new Error(`El archivo ${normalizedPath} no existe o no se puede acceder`);
+          throw new Error(`El archivo ${normalizedPath} no existe o no se puede acceder ${err}`);
         })
       ]);
       
@@ -456,7 +470,7 @@ export class DocumentService {
     documentId: string, 
     filePath: string,
     totalSize: number,
-    alreadyLoaded: number
+    _alreadyLoaded: number
   ): Promise<void> {
     try {
       // Obtén el documento actual de la caché
@@ -464,7 +478,6 @@ export class DocumentService {
       if (!document) {
         throw new Error(`Documento ${documentId} no encontrado en caché`);
       }
-      
       // Lee el archivo completo
       const fullContent = await fs.promises.readFile(filePath, 'utf8');
       
@@ -908,12 +921,17 @@ export class DocumentService {
     }
     
     // Emite evento de versión creada
-    eventBus.emit(DocumentEventType.VERSION_CREATED, { 
+    const eventData: { documentId: string; versionId: string; comment?: string } = {
       documentId: document.id,
-      versionId: version.id,
-      comment: version.commitMessage
-    });
-    
+      versionId: version.id
+    };
+
+    // Solo incluye la propiedad comment si commitMessage está definido
+    if (version.commitMessage !== undefined) {
+      eventData.comment = version.commitMessage;
+    }
+
+    eventBus.emit(DocumentEventType.VERSION_CREATED, eventData);
     return version;
   }
 
@@ -928,16 +946,17 @@ export class DocumentService {
       id: uuidv4(),
       documentId: document.id,
       content: document.content,
-      commitMessage,
       timestamp: new Date().toISOString(),
       version: document.version,
-      author: document.metadata.author,
       sustainabilityMetrics: {
-        diffSize: 0, // En implementación real calcularíamos diferencia
-        compressionRatio: document.metadata.sustainability ? 
+        diffSize: 0,
+        compressionRatio: document.metadata.sustainability ?
           document.metadata.sustainability.optimizedSize / document.metadata.sustainability.originalSize : 1.0
-      }
-    };
+      },
+      // Añadir propiedades condicionales
+      ...(commitMessage !== undefined && { commitMessage }),
+      ...(document.metadata.author !== undefined && { author: document.metadata.author })
+    } as DocumentVersion;
   }
 
   /**
@@ -1132,17 +1151,31 @@ export class DocumentService {
   }
 
   /**
+   * Verifica si el servicio está inicializado
+   */
+  public isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /**
    * Verifica que el servicio esté inicializado
-   * Si no está inicializado, intenta inicializarlo automáticamente
+   * Si no está inicializado, intenta inicializarlo automáticamente de forma síncrona
    */
   private ensureInitialized(): void {
     if (!this.initialized) {
       try {
         // Intentamos inicializar automáticamente en lugar de fallar
-        this.initialize().catch(error => {
-          console.error('Error inicializando automáticamente DocumentService:', error);
-          throw new Error('DocumentService no inicializado. Llame a initialize() primero.');
-        });
+        console.log('Intentando inicializar DocumentService automáticamente...');
+        
+        // Crear directorio de documentos de forma síncrona
+        const dirPath = this.documentsPath;
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
+        
+        // Marcar como inicializado
+        this.initialized = true;
+        console.log('DocumentService inicializado automáticamente con éxito');
       } catch (error) {
         console.error('Error en la inicialización automática:', error);
         throw new Error('DocumentService no inicializado. Error en inicialización automática.');
@@ -1181,13 +1214,16 @@ export class DocumentService {
       }
     }
     
-    // Buscar etiquetas en frontmatter YAML
     const frontmatterRegex = /^---\n([\s\S]*?)\n---/;
     const frontmatter = content.match(frontmatterRegex);
-    if (frontmatter) {
-      const tagsLine = frontmatter[1].match(/tags:\s*\[([^\]]*)\]/i);
-      if (tagsLine) {
-        const tagsStr = tagsLine[1];
+
+    if (frontmatter && frontmatter[1] !== undefined) {
+      const frontmatterContent = frontmatter[1]; // Ahora TypeScript sabe que no es undefined
+      const tagsLine = frontmatterContent.match(/tags:\s*\[([^\]]*)\]/i);
+      
+      if (tagsLine && tagsLine[1] !== undefined) {
+        const tagsStr = tagsLine[1]; // Ahora TypeScript sabe que no es undefined
+        
         tagsStr.split(',').map(tag => tag.trim()).filter(Boolean).forEach(tag => {
           // Limpia comillas si existen
           const cleanTag = tag.replace(/["']/g, '');

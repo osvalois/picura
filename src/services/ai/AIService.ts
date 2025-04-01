@@ -1,7 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import { app } from 'electron';
-import path from 'path';
-import fs from 'fs';
 import { 
   AIPrompt, 
   AIResponse, 
@@ -14,7 +11,7 @@ import {
 } from '../../shared/types/AITypes';
 import { eventBus } from '../../core/events/EventBus';
 import { AIEventType, SystemEventType } from '../../core/events/EventTypes';
-import { debounce, measureExecutionTime } from '../../renderer/utils/performanceUtils';
+import { debounce } from '../../renderer/utils/performanceUtils';
 import { storageService } from '../storage/StorageService';
 
 /**
@@ -136,7 +133,7 @@ export class AIService {
     
     // Simula carga de modelo
     this.localModel = {
-      generate: async (prompt: string, options: any) => {
+      generate: async (prompt: string, _: any) => {
         // Simulación de generación local
         return {
           text: `Respuesta simulada para: ${prompt.substring(0, 20)}...`,
@@ -154,7 +151,7 @@ export class AIService {
     // Para este MVP, simulamos clientes
     
     this.apiClients.set('openai', {
-      generate: async (prompt: string, options: any) => {
+      generate: async (prompt: string, _: any) => {
         // Simulación de llamada a OpenAI
         return {
           text: `Respuesta simulada de OpenAI para: ${prompt.substring(0, 20)}...`,
@@ -168,7 +165,7 @@ export class AIService {
     });
     
     this.apiClients.set('anthropic', {
-      generate: async (prompt: string, options: any) => {
+      generate: async (prompt: string, _: any) => {
         // Simulación de llamada a Anthropic
         return {
           text: `Respuesta simulada de Anthropic para: ${prompt.substring(0, 20)}...`,
@@ -524,9 +521,11 @@ export class AIService {
       if (this.suggestionCache.size > 50) {
         // Elimina entradas aleatorias
         const keys = Array.from(this.suggestionCache.keys());
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 10 && keys.length > 0; i++) {
           const randomKey = keys[Math.floor(Math.random() * keys.length)];
-          this.suggestionCache.delete(randomKey);
+          if (randomKey !== undefined) {
+            this.suggestionCache.delete(randomKey);
+          }
         }
       }
       
@@ -546,7 +545,7 @@ export class AIService {
   /**
    * Parsea sugerencias del texto generado
    */
-  private parseSuggestions(text: string, context: AIContext): AISuggestion[] {
+  private parseSuggestions(text: string, _: AIContext): AISuggestion[] {
     // En una implementación real, analizaríamos la respuesta de IA
     // Para este MVP, generamos sugerencias simuladas
     
@@ -557,15 +556,16 @@ export class AIService {
     
     for (let i = 0; i < Math.min(lines.length, 3); i++) {
       const line = lines[i];
-      
-      suggestions.push({
-        id: uuidv4(),
-        text: line,
-        confidence: 0.7 + Math.random() * 0.3, // Entre 0.7 y 1.0
-        energy: 0.3, // Bajo consumo
-        contextualRelevance: 0.8, // Alta relevancia
-        type: i % 2 === 0 ? 'enhancement' : 'completion'
-      });
+      if (line !== undefined) {
+        suggestions.push({
+          id: uuidv4(),
+          text: line,
+          confidence: 0.7 + Math.random() * 0.3, // Entre 0.7 y 1.0
+          energy: 0.3, // Bajo consumo
+          contextualRelevance: 0.8, // Alta relevancia
+          type: i % 2 === 0 ? 'enhancement' : 'completion'
+        });
+      }
     }
     
     return suggestions;

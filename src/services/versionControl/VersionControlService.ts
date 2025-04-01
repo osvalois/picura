@@ -9,7 +9,7 @@ import { VersionInfo, VersionChange, VersionCommitOptions, VersionHistoryOptions
 import { Document } from '../../shared/types/Document';
 import { eventBus } from '../../core/events/EventBus';
 import { VersionControlEventType, DocumentEventType } from '../../core/events/EventTypes';
-import { PATHS, APP_CONSTANTS } from '../../config/defaults';
+import { PATHS } from '../../config/defaults';
 import { storageService } from '../storage/StorageService';
 import { documentService } from '../document/DocumentService';
 import { processInChunks } from '../../renderer/utils/performanceUtils';
@@ -141,7 +141,7 @@ export class VersionControlService {
       const previousVersion = previousVersions.length > 0 ? previousVersions[0] : null;
       
       // Analiza cambios desde versión anterior
-      const changes = await this.calculateChanges(document, previousVersion);
+      const changes = await this.calculateChanges(document, previousVersion || null);
       
       // Genera ID único para la versión
       const versionId = uuidv4();
@@ -288,7 +288,7 @@ export class VersionControlService {
    */
   private async createGitCommit(
     document: Document,
-    versionInfo: VersionInfo,
+    _versionInfo: VersionInfo,
     options: VersionCommitOptions
   ): Promise<void> {
     if (!this.gitEnabled) return;
@@ -346,107 +346,126 @@ export class VersionControlService {
   /**
    * Obtiene historial de versiones de un documento
    */
-  public async getVersionHistory(
-    documentId: string,
-    options: VersionHistoryOptions = {}
-  ): Promise<VersionInfo[]> {
-    this.ensureInitialized();
+/**
+ * Obtiene historial de versiones de un documento
+ */
+public async getVersionHistory(
+  documentId: string,
+  options: VersionHistoryOptions = {}
+): Promise<VersionInfo[]> {
+  this.ensureInitialized();
+  
+  try {
+    // Crear un objeto de consulta limpio sin valores undefined
+    const queryOptions: {
+      where?: string;
+      params?: any[];
+      orderBy?: string;
+      limit?: number;
+      offset?: number;
+    } = {
+      where: 'document_id = ?',
+      params: [documentId],
+      orderBy: 'version DESC'
+    };
     
-    try {
-      // Recupera versiones de base de datos para eficiencia
-      const dbVersions = await storageService.getAll('document_versions', {
-        where: 'document_id = ?',
-        params: [documentId],
-        orderBy: 'version DESC',
-        limit: options.limit,
-        offset: options.offset
-      });
-      
-      if (dbVersions.length === 0) {
-        return [];
-      }
-      
-      // Carga información completa de cada versión
-      const versions: VersionInfo[] = [];
-      
-      // Procesa en chunks para no sobrecargar la aplicación
-      await processInChunks(dbVersions, async (dbVersion) => {
+    // Solo añadir estas propiedades si tienen valores
+    if (options.limit !== undefined) {
+      queryOptions.limit = options.limit;
+    }
+    
+    if (options.offset !== undefined) {
+      queryOptions.offset = options.offset;
+    }
+    
+    // Recupera versiones de base de datos para eficiencia
+    const dbVersions = await storageService.getAll('document_versions', queryOptions);
+    
+    if (dbVersions.length === 0) {
+      return [];
+    }
+    
+    // Carga información completa de cada versión
+    const versions: VersionInfo[] = [];
+    
+    // Procesa en chunks para no sobrecargar la aplicación
+    await processInChunks(dbVersions, async (dbVersion) => {
+      try {
+        // Carga versión desde archivo
+        const versionPath = path.join(this.versionsPath, documentId, `${dbVersion && typeof dbVersion === 'object' && 'id' in dbVersion ? dbVersion.id : 'unknown'}.json`);
+        
+        let versionInfo: VersionInfo;
+        
         try {
-          // Carga versión desde archivo
-          const versionPath = path.join(this.versionsPath, documentId, `${dbVersion && typeof dbVersion === 'object' && 'id' in dbVersion ? dbVersion.id : 'unknown'}.json`);
+          // Intenta cargar desde archivo JSON
+          const content = await fs.promises.readFile(versionPath, 'utf8');
+          versionInfo = JSON.parse(content);
+        } catch (err) {
+          // Si falla, reconstruye desde datos en BD
+          // Creamos un objeto tipado para acceder a dbVersion
+          const typedDbVersion = dbVersion as Record<string, unknown>;
           
-          let versionInfo: VersionInfo;
+          versionInfo = {
+            id: typedDbVersion.id as string,
+            documentId: documentId,
+            version: Number(typedDbVersion.version || 0),
+            timestamp: typedDbVersion.timestamp as string || new Date().toISOString(),
+            message: (typedDbVersion.commit_message as string) || `Versión ${typedDbVersion.version || 0}`,
+            author: typedDbVersion.author as string,
+            changes: [],
+            sustainabilityMetrics: typedDbVersion.sustainability_metrics ? 
+              JSON.parse(typeof typedDbVersion.sustainability_metrics === 'string' ? 
+                typedDbVersion.sustainability_metrics as string : '{}') : {
+                diffSize: 0,
+                compressionRatio: 1,
+                storageImpact: 0
+              }
+          };
+        }
+        
+        // Si se solicita contenido, lo cargamos
+        if (options.includeContent) {
+          // Verifica si hay ruta de contenido en BD
+          const typedDbVersion = dbVersion as Record<string, unknown>;
+          const contentPath = typedDbVersion.content_path as string || 
+            path.join(this.versionsPath, documentId, `${typedDbVersion.id || 'unknown'}.content.md`);
           
           try {
-            // Intenta cargar desde archivo JSON
-            const content = await fs.promises.readFile(versionPath, 'utf8');
-            versionInfo = JSON.parse(content);
+            const content = await fs.promises.readFile(contentPath, 'utf8');
+            
+            // Actualiza changes con contenido
+            versionInfo.changes = [{
+              id: versionInfo.changes[0]?.id || uuidv4(),
+              path: typeof contentPath === 'string' ? contentPath : path.join(this.versionsPath, documentId, `${versionInfo.id}.content.md`),
+              type: 'modified',
+              additions: 0,
+              deletions: 0,
+              content
+            }];
           } catch (err) {
-            // Si falla, reconstruye desde datos en BD
-            // Creamos un objeto tipado para acceder a dbVersion
-            const typedDbVersion = dbVersion as Record<string, unknown>;
-            
-            versionInfo = {
-              id: typedDbVersion.id as string,
-              documentId: documentId,
-              version: Number(typedDbVersion.version || 0),
-              timestamp: typedDbVersion.timestamp as string || new Date().toISOString(),
-              message: (typedDbVersion.commit_message as string) || `Versión ${typedDbVersion.version || 0}`,
-              author: typedDbVersion.author as string,
-              changes: [],
-              sustainabilityMetrics: typedDbVersion.sustainability_metrics ? 
-                JSON.parse(typeof typedDbVersion.sustainability_metrics === 'string' ? 
-                  typedDbVersion.sustainability_metrics as string : '{}') : {
-                  diffSize: 0,
-                  compressionRatio: 1,
-                  storageImpact: 0
-                }
-            };
+            console.warn(`No se pudo cargar contenido para versión ${versionInfo.id}:`, err);
           }
-          
-          // Si se solicita contenido, lo cargamos
-          if (options.includeContent) {
-            // Verifica si hay ruta de contenido en BD
-            const typedDbVersion = dbVersion as Record<string, unknown>;
-            const contentPath = typedDbVersion.content_path as string || 
-              path.join(this.versionsPath, documentId, `${typedDbVersion.id || 'unknown'}.content.md`);
-            
-            try {
-              const content = await fs.promises.readFile(contentPath, 'utf8');
-              
-              // Actualiza changes con contenido
-              versionInfo.changes = [{
-                id: versionInfo.changes[0]?.id || uuidv4(),
-                path: typeof contentPath === 'string' ? contentPath : path.join(this.versionsPath, documentId, `${versionInfo.id}.content.md`),
-                type: 'modified',
-                additions: 0,
-                deletions: 0,
-                content
-              }];
-            } catch (err) {
-              console.warn(`No se pudo cargar contenido para versión ${versionInfo.id}:`, err);
-            }
-          }
-          
-          // Si no se requieren changes y no se pidió contenido, los eliminamos
-          if (!options.includeChanges && !options.includeContent) {
-            versionInfo.changes = [];
-          }
-          
-          versions.push(versionInfo);
-        } catch (err) {
-          const typedDbVersion = dbVersion as Record<string, unknown>;
-          console.warn(`Error cargando versión ${typedDbVersion.id || 'desconocida'}:`, err);
         }
-      }, 5); // Procesa 5 versiones a la vez
-      
-      // Ordenar por versión descendente
-      return versions.sort((a, b) => b.version - a.version);
-    } catch (error) {
-      console.error(`Error obteniendo historial de versiones para documento ${documentId}:`, error);
-      throw error;
-    }
+        
+        // Si no se requieren changes y no se pidió contenido, los eliminamos
+        if (!options.includeChanges && !options.includeContent) {
+          versionInfo.changes = [];
+        }
+        
+        versions.push(versionInfo);
+      } catch (err) {
+        const typedDbVersion = dbVersion as Record<string, unknown>;
+        console.warn(`Error cargando versión ${typedDbVersion.id || 'desconocida'}:`, err);
+      }
+    }, 5); // Procesa 5 versiones a la vez
+    
+    // Ordenar por versión descendente
+    return versions.sort((a, b) => b.version - a.version);
+  } catch (error) {
+    console.error(`Error obteniendo historial de versiones para documento ${documentId}:`, error);
+    throw error;
   }
+}
 
   /**
    * Restaura una versión anterior de un documento
@@ -469,13 +488,12 @@ export class VersionControlService {
       // Obtiene contenido de la versión
       let content = '';
       
-      if (versionInfo.changes && versionInfo.changes.length > 0) {
-        content = versionInfo.changes[0].content || '';
-      } else {
-        // Si no tenemos contenido en changes, intentamos cargar del archivo
-        const contentPath = path.join(this.versionsPath, documentId, `${versionId}.content.md`);
-        content = await fs.promises.readFile(contentPath, 'utf8');
-      }
+      if (versionInfo.changes && 
+        versionInfo.changes.length > 0 && 
+        versionInfo.changes[0] && 
+        versionInfo.changes[0].content !== undefined) {
+      content = versionInfo.changes[0].content;
+    }
       
       // Obtiene documento actual
       const currentDocument = await documentService.getDocument(documentId);

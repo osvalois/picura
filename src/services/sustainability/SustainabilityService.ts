@@ -5,14 +5,14 @@ import { configManager } from '../../config/ConfigManager';
 import { eventBus } from '../../core/events/EventBus';
 import { SystemEventType, SustainabilityEventType } from '../../core/events/EventTypes';
 import { ENERGY_MODE_CONFIGS, MONITORING_CONFIG } from '../../config/defaults';
-import { app, powerMonitor } from 'electron';
+import { app } from 'electron';
 
 /**
  * Servicio que gestiona la sostenibilidad y eficiencia energética de la aplicación
  */
 export class SustainabilityService {
   // Métodos stub para implementaciones futuras
-  public async getMetricsHistory(timeRange: string, limit: number): Promise<any> {
+  public async getMetricsHistory(_timeRange: string, _limit: number): Promise<any> {
     return Promise.resolve({
       timestamps: [],
       cpuUsage: [],
@@ -39,7 +39,7 @@ export class SustainabilityService {
     });
   }
   
-  public async startIntensiveMonitoring(duration: number): Promise<boolean> {
+  public async startIntensiveMonitoring(_duration: number): Promise<boolean> {
     return Promise.resolve(true);
   }
   
