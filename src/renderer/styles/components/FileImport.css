@@ -1,0 +1,134 @@
+/* Estilos para el componente FileImport */
+
+.file-import {
+  width: 100%;
+  margin: 1rem 0;
+}
+
+/* Estilo para modo simplificado (ahorro de energía) */
+.file-import--simple {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.5rem;
+  background-color: var(--color-bg-subtle, #f7fafc);
+}
+
+/* Botones */
+.file-import__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.file-import__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  color: white;
+  background-color: var(--color-primary, #3182ce);
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.file-import__button:hover:not(:disabled) {
+  background-color: var(--color-primary-dark, #2b6cb0);
+}
+
+.file-import__button:focus-visible {
+  outline: 2px solid var(--color-primary-light, #63b3ed);
+  outline-offset: 2px;
+}
+
+.file-import__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-import__button--secondary {
+  background-color: transparent;
+  color: var(--color-primary, #3182ce);
+  border: 1px solid var(--color-primary, #3182ce);
+}
+
+.file-import__button--secondary:hover:not(:disabled) {
+  background-color: var(--color-primary-alpha, rgba(49, 130, 206, 0.1));
+}
+
+/* Barra de progreso */
+.file-import__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.file-import__progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: var(--color-bg-accent, #e2e8f0);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.file-import__progress-fill {
+  height: 100%;
+  background-color: var(--color-primary, #3182ce);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.file-import__progress-text {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #718096);
+  text-align: right;
+}
+
+/* Tema oscuro */
+@media (prefers-color-scheme: dark) {
+  .file-import--simple {
+    border-color: var(--color-border-dark, #4a5568);
+    background-color: var(--color-bg-subtle-dark, #1a202c);
+  }
+  
+  .file-import__button--secondary {
+    color: var(--color-primary-light, #63b3ed);
+    border-color: var(--color-primary-light, #63b3ed);
+  }
+  
+  .file-import__button--secondary:hover:not(:disabled) {
+    background-color: var(--color-primary-alpha-dark, rgba(49, 130, 206, 0.2));
+  }
+  
+  .file-import__progress-bar {
+    background-color: var(--color-bg-accent-dark, #4a5568);
+  }
+  
+  .file-import__progress-text {
+    color: var(--color-text-secondary-dark, #a0aec0);
+  }
+}
+
+/* Responsivo */
+@media (max-width: 480px) {
+  .file-import--simple {
+    padding: 1rem;
+  }
+  
+  .file-import__buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .file-import__button {
+    width: 100%;
+  }
+}

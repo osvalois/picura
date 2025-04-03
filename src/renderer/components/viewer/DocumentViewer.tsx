@@ -106,8 +106,11 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     maxZoomLevel: 3
   });
 
-  // Cargar documento si se proporciona un ID
+  // Cargar documento si se proporciona un ID - con prevención de bucles infinitos
   useEffect(() => {
+    // Referencia para controlar si el componente está montado
+    let isMounted = true;
+    
     if (!currentDocId) {
       // Si no hay ID pero hay contenido inicial, detectar el tipo
       if (initialContent) {
@@ -121,6 +124,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       try {
         const doc = await getDocument(currentDocId);
 
+        // Evitamos actualizar el estado si el componente se ha desmontado
+        if (!isMounted) return;
+
         if (doc) {
           setContent(doc.content);
           setTitle(doc.title);
@@ -133,6 +139,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           });
         }
       } catch (error) {
+        // Evitamos actualizar el estado si el componente se ha desmontado
+        if (!isMounted) return;
+        
         console.error('Error loading document:', error);
         setNotification({
           message: `Error al cargar el documento: ${(error as Error).message || 'Error desconocido'}`,
@@ -143,6 +152,11 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     };
 
     loadDocument();
+    
+    // Limpieza para evitar actualizaciones de estado en componentes desmontados
+    return () => {
+      isMounted = false;
+    };
   }, [currentDocId, getDocument, initialContent]);
 
   // Actualizar contenido cuando el documento actual cambia

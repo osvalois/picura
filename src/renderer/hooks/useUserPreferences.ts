@@ -25,27 +25,32 @@ export function useUserPreferences() {
   
   // Carga inicial
   useEffect(() => {
+    let isMounted = true; // Variable para controlar si el componente está montado
+    
     const loadPreferences = async () => {
       try {
+        if (!isMounted) return; // Evitar actualizar estado si está desmontado
         setIsLoading(true);
         
         // Verificar que la API existe y tiene el método requerido
         if (window.electronAPI) {
           try {
             const prefs = await window.electronAPI.getUserPreferences();
-            if (prefs) {
+            if (prefs && isMounted) {
               setPreferences(prefs);
             }
           } catch (prefErr) {
             console.error('Error fetching preferences:', prefErr);
             // Fallback a valores predeterminados si hay error
-            setPreferences(DEFAULT_USER_PREFERENCES);
+            if (isMounted) {
+              setPreferences(DEFAULT_USER_PREFERENCES);
+            }
           }
           
           // Si hay perfil de usuario cargado
           try {
             const profile = await window.electronAPI.getUserProfile();
-            if (profile && profile.profileType) {
+            if (profile && profile.profileType && isMounted) {
               setProfileType(profile.profileType);
             }
           } catch (profileErr) {
@@ -55,19 +60,30 @@ export function useUserPreferences() {
         } else {
           // Fallback a valores predeterminados
           console.warn('No electronAPI available, using default preferences');
-          setPreferences(DEFAULT_USER_PREFERENCES);
+          if (isMounted) {
+            setPreferences(DEFAULT_USER_PREFERENCES);
+          }
         }
       } catch (err) {
         console.error('Error loading preferences:', err);
-        setError('Failed to load user preferences');
-        // Fallback a valores predeterminados
-        setPreferences(DEFAULT_USER_PREFERENCES);
+        if (isMounted) {
+          setError('Failed to load user preferences');
+          // Fallback a valores predeterminados
+          setPreferences(DEFAULT_USER_PREFERENCES);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
     
     loadPreferences();
+    
+    // Función de limpieza para evitar actualizar estado en componentes desmontados
+    return () => {
+      isMounted = false;
+    };
   }, []);
   
   // Actualiza preferencias

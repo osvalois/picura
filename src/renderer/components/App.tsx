@@ -7,6 +7,7 @@ import { Document } from '../../shared/types/Document';
 import { DocumentAPI } from '../utils/ipcAPI';
 import { EnergyMode } from '../../shared/types/SustainabilityMetrics';
 import { debounce } from '../utils/performanceUtils';
+import FileImport from "@/renderer/components/common/FileImport";
 
 // Componente de límite de errores para capturar problemas en los componentes hijos
 interface ErrorBoundaryProps {
@@ -149,46 +150,94 @@ const AppContent: React.FC = () => {
   const [isAppReady, setIsAppReady] = useState(false);
   const [darkMode] = useState(false);
   
-  // Inicialización de la aplicación y carga de datos
-useEffect(() => {
-  const initializeApp = async () => {
-    try {
-      const docs = await listDocuments();
-      setDocuments(docs);
-      
-      // Analiza carpetas de documentos de forma optimizada
-      const pathCountMap = new Map<string, number>();
-      docs.forEach(doc => {
-        const path = doc.path;
-        pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
-      });
-      
-      // Definimos el tipo explícitamente para asegurar que name sea siempre string
-      const folderData: Array<{ path: string; name: string; count: number }> = Array.from(pathCountMap.entries()).map(([path, count]) => {
+  // Función que actualiza el estado con los nuevos datos de carpetas
+  const setFoldersData = useCallback((docs: Document[], newFolders: string[] = []) => {
+    // Uso de Map para optimizar el conteo y evitar múltiples iteraciones
+    const pathCountMap = new Map<string, number>();
+    docs.forEach(doc => {
+      const path = doc.path;
+      pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+    });
+    
+    // Incluir también carpetas nuevas con conteo inicial 0
+    newFolders.forEach(path => {
+      if (!pathCountMap.has(path)) {
+        pathCountMap.set(path, 0);
+      }
+    });
+    
+    // Definir explícitamente el tipo de folderData
+    const folderData: Array<{ path: string; name: string; count: number }> = 
+      Array.from(pathCountMap.entries()).map(([path, count]) => {
         const segments = path.split('/').filter(Boolean);
-        // Aseguramos que name sea siempre un string
-        const name = segments.length > 0 ? (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+        
+        // Garantizar que name siempre sea un string válido
+        let name: string;
+        if (segments.length > 0) {
+          // Si hay segmentos, tomamos el último y nos aseguramos que no sea undefined
+          const lastSegment = segments[segments.length - 1];
+          name = lastSegment !== undefined ? lastSegment : 'Sin nombre';
+        } else {
+          // Si no hay segmentos, usamos 'Raíz' como valor predeterminado
+          name = 'Raíz';
+        }
+        
         return { path, name, count };
       });
-      
-      setFolders(folderData);
-      
-      // Indica que la aplicación está lista
-      setIsAppReady(true);
-    } catch (error) {
-      console.error("Error initializing app data:", error);
-      // Aun con error, marcamos como listo para mostrar la UI
-      setIsAppReady(true);
-    }
-  };
+    
+    // Actualizar el estado directamente
+    setFolders(folderData);
+  }, []);
   
-  initializeApp();
-  
-  // Efecto de limpieza en caso de desmontaje
-  return () => {
-    // Limpieza si es necesario
-  };
-}, [listDocuments]);
+  // Inicialización de la aplicación y carga de datos
+  useEffect(() => {
+    let isMounted = true; // Para evitar actualizaciones de estado tras desmontaje
+    
+    const initializeApp = async () => {
+      try {
+        const docs = await listDocuments();
+        
+        // Verificamos que el componente sigue montado
+        if (!isMounted) return;
+        
+        // Actualizamos documentos
+        setDocuments(docs);
+        
+        // Procesamos datos de carpetas y actualizamos el estado
+        const pathCountMap = new Map<string, number>();
+        docs.forEach(doc => {
+          const path = doc.path;
+          pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+        });
+        
+        const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+          const segments = path.split('/').filter(Boolean);
+          const name = segments.length > 0 ? 
+            (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+          return { path, name, count };
+        });
+        
+        // Actualizamos el estado de carpetas
+        setFolders(folderData);
+        
+        // Indica que la aplicación está lista
+        setIsAppReady(true);
+      } catch (error) {
+        console.error("Error initializing app data:", error);
+        // Aun con error, marcamos como listo para mostrar la UI si seguimos montados
+        if (isMounted) {
+          setIsAppReady(true);
+        }
+      }
+    };
+    
+    initializeApp();
+    
+    // Efecto de limpieza en caso de desmontaje
+    return () => {
+      isMounted = false;
+    };
+  }, [listDocuments]);
   // Manejadores de eventos optimizados con useCallback y debounce para memoización
   const handleDocumentSelect = useCallback(
     debounce(async (id: string) => {
@@ -224,20 +273,25 @@ useEffect(() => {
       );
       
       if (newDocument) {
-        // Actualiza lista de documentos
-        setDocuments(prev => [newDocument, ...prev]);
+        // Actualiza lista de documentos y agrega el nuevo
+        const updatedDocs = [newDocument, ...documents];
+        setDocuments(updatedDocs);
         
-        // Actualiza contador de carpetas de forma eficiente
-        setFolders(prev => {
-          const rootFolder = prev.find(f => f.path === '/');
-          if (rootFolder) {
-            return prev.map(f => 
-              f.path === '/' ? { ...f, count: f.count + 1 } : f
-            );
-          } else {
-            return [...prev, { path: '/', name: 'Raíz', count: 1 }];
-          }
+        // Procesa y actualiza carpetas
+        const pathCountMap = new Map<string, number>();
+        updatedDocs.forEach(doc => {
+          const path = doc.path;
+          pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
         });
+        
+        const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+          const segments = path.split('/').filter(Boolean);
+          const name = segments.length > 0 ? 
+            (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+          return { path, name, count };
+        });
+        
+        setFolders(folderData);
         
         // Selecciona automáticamente el nuevo documento
         await setActiveDocument(newDocument.id);
@@ -247,45 +301,9 @@ useEffect(() => {
     } finally {
       setIsCreatingDocument(false);
     }
-  }, [createDocument, setActiveDocument]);
+  }, [createDocument, setActiveDocument, documents]);
   
-// Función auxiliar memoizada para actualizar carpetas - CORREGIDA
-const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) => {
-  // Uso de Map para optimizar el conteo y evitar múltiples iteraciones
-  const pathCountMap = new Map<string, number>();
-  docs.forEach(doc => {
-    const path = doc.path;
-    pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
-  });
-  
-  // Incluir también carpetas nuevas con conteo inicial 0
-  newFolders.forEach(path => {
-    if (!pathCountMap.has(path)) {
-      pathCountMap.set(path, 0);
-    }
-  });
-  
-  // Definir explícitamente el tipo de folderData
-  const folderData: Array<{ path: string; name: string; count: number }> = 
-    Array.from(pathCountMap.entries()).map(([path, count]) => {
-      const segments = path.split('/').filter(Boolean);
-      
-      // Garantizar que name siempre sea un string válido
-      let name: string;
-      if (segments.length > 0) {
-        // Si hay segmentos, tomamos el último y nos aseguramos que no sea undefined
-        const lastSegment = segments[segments.length - 1];
-        name = lastSegment !== undefined ? lastSegment : 'Sin nombre';
-      } else {
-        // Si no hay segmentos, usamos 'Raíz' como valor predeterminado
-        name = 'Raíz';
-      }
-      
-      return { path, name, count };
-    });
-  
-  setFolders(folderData);
-}, []);
+
   const handleImportFiles = useCallback(async () => {
     try {
       const importedDocs = await DocumentAPI.importFiles();
@@ -294,13 +312,26 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
         const docs = await listDocuments();
         setDocuments(docs);
         
-        // Actualiza carpetas
-        updateFolders(docs);
+        // Procesa y actualiza carpetas
+        const pathCountMap = new Map<string, number>();
+        docs.forEach(doc => {
+          const path = doc.path;
+          pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+        });
+        
+        const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+          const segments = path.split('/').filter(Boolean);
+          const name = segments.length > 0 ? 
+            (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+          return { path, name, count };
+        });
+        
+        setFolders(folderData);
       }
     } catch (error) {
       console.error("Error importing files:", error);
     }
-  }, [DocumentAPI, listDocuments, updateFolders]);
+  }, [DocumentAPI, listDocuments]);
   
   const handleImportFolder = useCallback(async () => {
     try {
@@ -314,13 +345,35 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
         const docs = await listDocuments();
         setDocuments(docs);
         
-        // Actualiza carpetas
-        updateFolders(docs, result.folders);
+        // Procesa y actualiza carpetas
+        const pathCountMap = new Map<string, number>();
+        docs.forEach(doc => {
+          const path = doc.path;
+          pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+        });
+        
+        // Incluir también carpetas nuevas
+        if (result.folders) {
+          result.folders.forEach(path => {
+            if (!pathCountMap.has(path)) {
+              pathCountMap.set(path, 0);
+            }
+          });
+        }
+        
+        const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+          const segments = path.split('/').filter(Boolean);
+          const name = segments.length > 0 ? 
+            (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+          return { path, name, count };
+        });
+        
+        setFolders(folderData);
       }
     } catch (error) {
       console.error("Error importing folder:", error);
     }
-  }, [DocumentAPI, listDocuments, updateFolders]);
+  }, [DocumentAPI, listDocuments]);
   
   const handleOpenFile = useCallback(async () => {
     try {
@@ -330,12 +383,25 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
       const docs = await listDocuments();
       setDocuments(docs);
       
-      // Actualiza carpetas
-      updateFolders(docs);
+      // Procesa y actualiza carpetas
+      const pathCountMap = new Map<string, number>();
+      docs.forEach(doc => {
+        const path = doc.path;
+        pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+      });
+      
+      const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+        const segments = path.split('/').filter(Boolean);
+        const name = segments.length > 0 ? 
+          (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+        return { path, name, count };
+      });
+      
+      setFolders(folderData);
     } catch (error) {
       console.error("Error opening file:", error);
     }
-  }, [openFile, listDocuments, updateFolders]);
+  }, [openFile, listDocuments]);
   
   const handleOpenFolder = useCallback(async () => {
     try {
@@ -346,13 +412,35 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
         const docs = await listDocuments();
         setDocuments(docs);
         
-        // Actualiza carpetas
-        updateFolders(docs, result.folders);
+        // Procesa y actualiza carpetas
+        const pathCountMap = new Map<string, number>();
+        docs.forEach(doc => {
+          const path = doc.path;
+          pathCountMap.set(path, (pathCountMap.get(path) || 0) + 1);
+        });
+        
+        // Incluir también carpetas nuevas
+        if (result.folders) {
+          result.folders.forEach(path => {
+            if (!pathCountMap.has(path)) {
+              pathCountMap.set(path, 0);
+            }
+          });
+        }
+        
+        const folderData = Array.from(pathCountMap.entries()).map(([path, count]) => {
+          const segments = path.split('/').filter(Boolean);
+          const name = segments.length > 0 ? 
+            (segments[segments.length - 1] || 'Sin nombre') : 'Raíz';
+          return { path, name, count };
+        });
+        
+        setFolders(folderData);
       }
     } catch (error) {
       console.error("Error opening folder:", error);
     }
-  }, [openFolder, listDocuments, updateFolders]);
+  }, [openFolder, listDocuments]);
   
   // Maneja el cambio de modo de energía - memoizado para evitar re-renderizados
   const handleSetEnergyMode = useCallback((mode: EnergyMode) => {
@@ -580,41 +668,37 @@ const renderAIAssistant = useCallback(() => {
                 </div>
                 <h2 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200">Bienvenido a Picura</h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-6">Selecciona un documento existente o crea uno nuevo para comenzar a trabajar con este editor Markdown sostenible.</p>
-                <div className="flex flex-wrap justify-center gap-3">
+                <div className="flex flex-col items-center gap-6 w-full max-w-md">
                   <button
                     onClick={handleCreateDocument}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50"
+                    className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50"
                     disabled={isCreatingDocument}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-center">
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                       </svg>
                       {isCreatingDocument ? 'Creando...' : 'Nuevo documento'}
                     </div>
                   </button>
-                  <button
-                    onClick={handleOpenFile}
-                    className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50"
-                  >
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-                      </svg>
-                      Abrir archivo
-                    </div>
-                  </button>
-                  <button
-                    onClick={handleOpenFolder}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-50"
-                  >
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                      Abrir carpeta
-                    </div>
-                  </button>
+                  
+                  <div className="w-full">
+                    <Suspense fallback={<div className="py-8 text-center text-gray-500">Cargando selector de archivos...</div>}>
+                      <FileImport
+                        onFilesLoaded={(docs: any) => {
+                          if (docs && docs.length > 0 && docs[0]?.id) {
+                            handleDocumentSelect(docs[0].id);
+                          }
+                        }}
+                        onError={(err: any) => {
+                          console.error('Error importing files:', err);
+                        }}
+                        enableFolders={true}
+                        showPreview={false}
+                        className="w-full"
+                      />
+                    </Suspense>
+                  </div>
                 </div>
               </div>
             </div>

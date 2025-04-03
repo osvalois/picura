@@ -75,20 +75,27 @@ const ViewerNotification: React.FC<ViewerNotificationProps> = ({
   
   // Efecto para ocultar la notificación después del tiempo especificado
   useEffect(() => {
-    if (duration > 0) {
+    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
+    if (duration > 0 && isVisible) {
       const timer = setTimeout(() => {
         setIsVisible(false);
-        setTimeout(() => {
+        
+        // Guardamos referencia al timer de salida para poder limpiarlo
+        dismissTimer = setTimeout(() => {
           onDismiss && onDismiss();
         }, 300); // Permitir que la animación de salida se complete
       }, duration);
       
       return () => {
         clearTimeout(timer);
+        if (dismissTimer) clearTimeout(dismissTimer);
       };
     }
-    return undefined;
-  }, [duration, onDismiss]);
+    return () => {
+      if (dismissTimer) clearTimeout(dismissTimer);
+    };
+  }, [duration, onDismiss, isVisible]);
   
   // Manejador para cerrar la notificación manualmente
   const handleDismiss = () => {

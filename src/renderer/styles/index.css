@@ -4,6 +4,7 @@
 @tailwind utilities;
 
 :root {
+  /* Colores originales de Picura */
   --primary-color: #10b981;
   --secondary-color: #3b82f6;
   --text-color: #1f2937;
@@ -20,6 +21,40 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --transition-speed: 200ms;
+  
+  /* Variables para FileSelector y DropZone */
+  --color-primary: var(--primary-color);
+  --color-primary-light: #63b3ed;
+  --color-primary-dark: #2b6cb0;
+  --color-primary-darker: #2c5282;
+  --color-primary-alpha: rgba(16, 185, 129, 0.05);
+  --color-primary-alpha-heavy: rgba(16, 185, 129, 0.08);
+  
+  /* Colores de fondo */
+  --color-bg: var(--background-color);
+  --color-bg-subtle: #f7fafc;
+  --color-bg-accent: #e2e8f0;
+  
+  /* Colores de texto */
+  --color-text-primary: var(--text-color);
+  --color-text-secondary: #718096;
+  --color-text-disabled: #a0aec0;
+  
+  /* Colores de borde */
+  --color-border: #e2e8f0;
+  --color-border-light: #edf2f7;
+  
+  /* Colores de estado */
+  --color-disabled: #cbd5e0;
+  --color-disabled-bg: #f1f5f9;
+  --color-error: var(--error-color);
+  --color-error-bg: #fff5f5;
+  --color-error-border: #fed7d7;
+  --color-error-border-light: #fed7d7;
+  --color-success: var(--success-color);
+  --color-success-bg: #f0fff4;
+  --color-warning: var(--warning-color);
+  --color-warning-bg: #fffaf0;
 }
 
 /* Dark mode variables */
@@ -331,3 +366,9 @@ textarea::-webkit-scrollbar-thumb {
     padding: 1rem;
   }
 }
+
+/* Importar estilos de componentes */
+@import './components/FileSelector.css';
+@import './components/DropZone.css';
+@import './components/FileImport.css';
+@import './components/FileImportExample.css';

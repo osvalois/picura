@@ -69,7 +69,7 @@ export function useDocumentLoader({
   // Actualiza el conteo de palabras de manera optimizada
   const updateWordCount = (doc: Document, operationId: Symbol) => {
     // Si ya tenemos conteo en metadatos, usamos ese
-    if (doc.metadata.wordCount) {
+    if (doc.metadata?.wordCount) {
       setWordCount(doc.metadata.wordCount);
       return;
     }
@@ -177,7 +177,7 @@ export function useDocumentLoader({
       setIsLoading(false);
 
       // Conteo exacto en segundo plano
-      if (!doc.metadata.wordCount && 'requestIdleCallback' in window) {
+      if (!doc.metadata?.wordCount && 'requestIdleCallback' in window) {
         window.requestIdleCallback(() => {
           if (isMounted.current && currentLoadOperation.current === operationId) {
             setWordCount(countWords(doc.content));
@@ -231,7 +231,7 @@ export function useDocumentLoader({
 
           setDocument(doc);
           setContent(doc.content);
-          setWordCount(doc.metadata.wordCount || Math.floor(doc.content.length / 5.5));
+          setWordCount(doc.metadata?.wordCount || Math.floor(doc.content.length / 5.5));
           setDocumentSize(determineDocumentSize(doc.content.length));
 
           setLoadState({

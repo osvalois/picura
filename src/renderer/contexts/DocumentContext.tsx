@@ -219,6 +219,7 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
   }, []);
 
   // Carga inicial
+  // Carga inicial solo una vez al montar el componente
   useEffect(() => {
     // Cargar documentos recientes
     const loadRecentDocuments = async () => {
@@ -244,7 +245,7 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
     };
     
     loadRecentDocuments();
-  }, [adapter]);
+  }, []); // Dependencia vacía para ejecutar solo al montar
   
   // Actualiza documentos recientes
   const updateRecentDocuments = (document: Document) => {
