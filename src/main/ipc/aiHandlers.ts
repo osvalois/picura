@@ -46,8 +46,20 @@ type AIMode = 'disabled' | 'minimal' | 'standard' | 'advanced';
  * Implementa funcionalidades optimizadas para eficiencia energética
  */
 export function setupAIHandlers(aiService: AIService) {
+  // Helper function to safely register handlers
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Remove any existing handler first
+      ipcMain.removeHandler(channel);
+      // Register the new handler
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+
   // Generar sugerencias
-  ipcMain.handle('ai:generateSuggestions', async (_, args: {
+  safelyRegisterHandler('ai:generateSuggestions', async (_: any, args: {
     content: string,
     context?: any
   }) => {
@@ -61,7 +73,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Analizar documento
-  ipcMain.handle('ai:analyzeDocument', async (_, documentId: string) => {
+  safelyRegisterHandler('ai:analyzeDocument', async (_: any, documentId: string) => {
     try {
       return await aiService.analyzeDocument(documentId);
     } catch (error) {
@@ -71,7 +83,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Extraer palabras clave
-  ipcMain.handle('ai:extractKeywords', async (_, text: string) => {
+  safelyRegisterHandler('ai:extractKeywords', async (_: any, text: string) => {
     try {
       return await aiService.extractKeywords(text);
     } catch (error) {
@@ -81,7 +93,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Generar resumen
-  ipcMain.handle('ai:generateSummary', async (_, args: {
+  safelyRegisterHandler('ai:generateSummary', async (_: any, args: {
     text: string,
     maxLength?: number
   }) => {
@@ -95,7 +107,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Traducir texto
-  ipcMain.handle('ai:translateText', async (_, args: {
+  safelyRegisterHandler('ai:translateText', async (_: any, args: {
     text: string,
     targetLanguage: string
   }) => {
@@ -109,7 +121,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Revisar gramática
-  ipcMain.handle('ai:checkGrammar', async (_, text: string) => {
+  safelyRegisterHandler('ai:checkGrammar', async (_: any, text: string) => {
     try {
       return await aiService.checkGrammar(text);
     } catch (error) {
@@ -119,7 +131,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Obtener modo de IA
-  ipcMain.handle('ai:getMode', async () => {
+  safelyRegisterHandler('ai:getMode', async () => {
     try {
       return await aiService.getMode();
     } catch (error) {
@@ -129,7 +141,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Establecer modo de IA
-  ipcMain.handle('ai:setMode', async (_, mode: AIMode) => {
+  safelyRegisterHandler('ai:setMode', async (_: any, mode: AIMode) => {
     try {
       return await aiService.setMode(mode);
     } catch (error) {
@@ -139,7 +151,7 @@ export function setupAIHandlers(aiService: AIService) {
   });
 
   // Verificar disponibilidad de IA
-  ipcMain.handle('ai:isAvailable', async () => {
+  safelyRegisterHandler('ai:isAvailable', async () => {
     try {
       return await aiService.isAvailable();
     } catch (error) {

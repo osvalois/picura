@@ -45,8 +45,20 @@ interface SearchResult {
  * Optimizado para rendimiento y sostenibilidad
  */
 export function setupSearchHandlers(searchService: SearchService) {
+  // Helper function to safely register handlers
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Remove any existing handler first
+      ipcMain.removeHandler(channel);
+      // Register the new handler
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+
   // Buscar documentos
-  ipcMain.handle('search:documents', async (_, args: {
+  safelyRegisterHandler('search:documents', async (_: any, args: {
     query: string,
     options?: SearchOptions
   }) => {
@@ -60,7 +72,7 @@ export function setupSearchHandlers(searchService: SearchService) {
   });
 
   // Indexar documento
-  ipcMain.handle('search:indexDocument', async (_, document: any) => {
+  safelyRegisterHandler('search:indexDocument', async (_: any, document: any) => {
     try {
       return await searchService.indexDocument(document);
     } catch (error) {
@@ -70,7 +82,7 @@ export function setupSearchHandlers(searchService: SearchService) {
   });
 
   // Eliminar documento del índice
-  ipcMain.handle('search:removeDocument', async (_, documentId: string) => {
+  safelyRegisterHandler('search:removeDocument', async (_: any, documentId: string) => {
     try {
       return await searchService.removeDocument(documentId);
     } catch (error) {
@@ -80,7 +92,7 @@ export function setupSearchHandlers(searchService: SearchService) {
   });
 
   // Obtener búsquedas recientes
-  ipcMain.handle('search:getRecentSearches', async (_, limit?: number) => {
+  safelyRegisterHandler('search:getRecentSearches', async (_: any, limit?: number) => {
     try {
       return await searchService.getRecentSearches(limit);
     } catch (error) {
@@ -90,7 +102,7 @@ export function setupSearchHandlers(searchService: SearchService) {
   });
 
   // Guardar búsqueda reciente
-  ipcMain.handle('search:saveRecentSearch', async (_, query: string) => {
+  safelyRegisterHandler('search:saveRecentSearch', async (_: any, query: string) => {
     try {
       await searchService.saveRecentSearch(query);
       return true;
@@ -101,7 +113,7 @@ export function setupSearchHandlers(searchService: SearchService) {
   });
 
   // Limpiar búsquedas recientes
-  ipcMain.handle('search:clearRecentSearches', async () => {
+  safelyRegisterHandler('search:clearRecentSearches', async () => {
     try {
       await searchService.clearRecentSearches();
       return true;
@@ -112,7 +124,7 @@ export function setupSearchHandlers(searchService: SearchService) {
   });
 
   // Reconstruir índice de búsqueda
-  ipcMain.handle('search:rebuildIndex', async () => {
+  safelyRegisterHandler('search:rebuildIndex', async () => {
     try {
       return await searchService.rebuildIndex();
     } catch (error) {

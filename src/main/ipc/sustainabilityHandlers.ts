@@ -7,8 +7,20 @@ import { EnergyMode } from '../../shared/types/SustainabilityMetrics';
  * Implementa eventos optimizados para monitoreo y ajuste de recursos
  */
 export function setupSustainabilityHandlers(sustainabilityService: SustainabilityService) {
+  // Helper function to safely register handlers
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Remove any existing handler first
+      ipcMain.removeHandler(channel);
+      // Register the new handler
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+
   // Obtener métricas de sostenibilidad actuales
-  ipcMain.handle('sustainability:getMetrics', async () => {
+  safelyRegisterHandler('sustainability:getMetrics', async () => {
     try {
       return await sustainabilityService.getMetrics();
     } catch (error) {
@@ -18,7 +30,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Obtener modo de energía actual
-  ipcMain.handle('sustainability:getEnergyMode', () => {
+  safelyRegisterHandler('sustainability:getEnergyMode', () => {
     try {
       return sustainabilityService.getCurrentEnergyMode();
     } catch (error) {
@@ -28,7 +40,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Establecer modo de energía
-  ipcMain.handle('sustainability:setEnergyMode', async (_, mode: EnergyMode) => {
+  safelyRegisterHandler('sustainability:setEnergyMode', async (_: any, mode: EnergyMode) => {
     try {
       return await sustainabilityService.setEnergyMode(mode);
     } catch (error) {
@@ -38,7 +50,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Generar informe de sostenibilidad
-  ipcMain.handle('sustainability:generateReport', async () => {
+  safelyRegisterHandler('sustainability:generateReport', async () => {
     try {
       return await sustainabilityService.generateSustainabilityReport();
     } catch (error) {
@@ -48,7 +60,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Obtener historial de métricas
-  ipcMain.handle('sustainability:getMetricsHistory', async (_, args: {
+  safelyRegisterHandler('sustainability:getMetricsHistory', async (_: any, args: {
     timeRange?: 'hour' | 'day' | 'week' | 'month',
     limit?: number
   }) => {
@@ -62,7 +74,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Obtener sugerencias de optimización
-  ipcMain.handle('sustainability:getOptimizationSuggestions', async () => {
+  safelyRegisterHandler('sustainability:getOptimizationSuggestions', async () => {
     try {
       return await sustainabilityService.getOptimizationSuggestions();
     } catch (error) {
@@ -72,7 +84,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Obtener estado de batería
-  ipcMain.handle('sustainability:getBatteryStatus', async () => {
+  safelyRegisterHandler('sustainability:getBatteryStatus', async () => {
     try {
       return await sustainabilityService.getBatteryStatus();
     } catch (error) {
@@ -82,7 +94,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Iniciar monitoreo intensivo (temporal)
-  ipcMain.handle('sustainability:startIntensiveMonitoring', async (_, duration: number = 60000) => {
+  safelyRegisterHandler('sustainability:startIntensiveMonitoring', async (_: any, duration: number = 60000) => {
     try {
       return await sustainabilityService.startIntensiveMonitoring(duration);
     } catch (error) {
@@ -92,7 +104,7 @@ export function setupSustainabilityHandlers(sustainabilityService: Sustainabilit
   });
 
   // Detener monitoreo intensivo
-  ipcMain.handle('sustainability:stopIntensiveMonitoring', async () => {
+  safelyRegisterHandler('sustainability:stopIntensiveMonitoring', async () => {
     try {
       return await sustainabilityService.stopIntensiveMonitoring();
     } catch (error) {

@@ -219,8 +219,20 @@ async function setupIpcHandlers() {
   
   // Mantiene manejadores básicos existentes para compatibilidad
   
+  // Configuración - Elimina y vuelve a registrar manejadores para evitar duplicados
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Intenta eliminar cualquier manejador existente
+      ipcMain.removeHandler(channel);
+      // Registra el nuevo manejador
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+  
   // Configuración
-  ipcMain.handle('get-user-preferences', async () => {
+  safelyRegisterHandler('get-user-preferences', async () => {
     try {
       // Asegurarse de que configManager está inicializado
       if (!configManager.isInitialized()) {
@@ -233,7 +245,7 @@ async function setupIpcHandlers() {
     }
   });
   
-  ipcMain.handle('update-user-preferences', async (_, preferences) => {
+  safelyRegisterHandler('update-user-preferences', async (_: any, preferences: any) => {
     try {
       // Asegurarse de que configManager está inicializado
       if (!configManager.isInitialized()) {
@@ -247,7 +259,7 @@ async function setupIpcHandlers() {
   });
   
   // Sostenibilidad básica (los detallados se manejan en sustainabilityHandlers.ts)
-  ipcMain.handle('get-sustainability-metrics', async () => {
+  safelyRegisterHandler('get-sustainability-metrics', async () => {
     try {
       return await sustainabilityService?.getMetrics() || { cpu: 0, memory: { total: 0, used: 0, percentage: 0 } };
     } catch (error) {
@@ -256,7 +268,7 @@ async function setupIpcHandlers() {
     }
   });
   
-  ipcMain.handle('get-energy-mode', () => {
+  safelyRegisterHandler('get-energy-mode', () => {
     try {
       return sustainabilityService?.getCurrentEnergyMode() || 'standard';
     } catch (error) {
@@ -265,7 +277,7 @@ async function setupIpcHandlers() {
     }
   });
   
-  ipcMain.handle('set-energy-mode', async (_, mode) => {
+  safelyRegisterHandler('set-energy-mode', async (_: any, mode: any) => {
     try {
       if (sustainabilityService) {
         return await sustainabilityService.setEnergyMode(mode);
@@ -276,7 +288,7 @@ async function setupIpcHandlers() {
     return false;
   });
   
-  ipcMain.handle('get-sustainability-report', async () => {
+  safelyRegisterHandler('get-sustainability-report', async () => {
     try {
       if (sustainabilityService) {
         return await sustainabilityService.generateSustainabilityReport();

@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { Document, DocumentChanges, DocumentMetadata } from '../../shared/types/Document';
 import { useSustainabilityContext } from './SustainabilityContext';
+import { debounce } from '../utils/performanceUtils';
 
 // API del contexto
 interface DocumentContextType {
@@ -42,12 +43,19 @@ class DocumentAdapter {
     try {
       if (this.api?.document?.list) {
         try {
+          // Usa el método correcto según el API preload
           const docs = await this.api.document.list('/') as Document[];
           return docs || [];
         } catch (listError) {
           console.error('Error específico en list:', listError);
           
-          // En caso de error de IPC, podríamos ofrecer documentos de ejemplo
+          // Si hay un error específico relacionado con handler no registrado
+          if (listError instanceof Error && 
+              listError.message.includes('No handler registered for')) {
+            console.log('Manejador de documentos no registrado. Usando documentos de ejemplo.');
+          }
+          
+          // En caso de error de IPC, ofrecemos documentos de ejemplo
           return this.getFallbackDocuments();
         }
       } else {
@@ -198,14 +206,39 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
   // Contexto de sostenibilidad para adaptar comportamiento
   const { currentEnergyMode } = useSustainabilityContext();
   
+  // Ref para controlar las solicitudes y permitir cancelación
+  const documentRequestRef = useRef<AbortController | null>(null);
+  
+  // Efecto para limpiar solicitudes pendientes al desmontar
+  useEffect(() => {
+    return () => {
+      if (documentRequestRef.current) {
+        documentRequestRef.current.abort();
+      }
+    };
+  }, []);
+
   // Carga inicial
   useEffect(() => {
     // Cargar documentos recientes
     const loadRecentDocuments = async () => {
       try {
+        // Cancelamos cualquier solicitud anterior
+        if (documentRequestRef.current) {
+          documentRequestRef.current.abort();
+        }
+        
+        // Creamos un nuevo controller
+        documentRequestRef.current = new AbortController();
+        
         const docs = await adapter.getRecentDocuments();
         setRecentDocuments(docs);
       } catch (error) {
+        // Ignoramos errores de solicitudes abortadas intencionalmente
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        
         console.error('Error loading recent documents:', error);
       }
     };
@@ -227,16 +260,34 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
     });
   };
   
-  // Obtiene un documento por su ID
+  // Obtiene un documento por su ID con soporte para cancelación
   const getDocument = async (id: string): Promise<Document | null> => {
     try {
+      // Cancelamos cualquier solicitud anterior
+      if (documentRequestRef.current) {
+        documentRequestRef.current.abort();
+      }
+      
+      // Creamos un nuevo controller para esta operación
+      documentRequestRef.current = new AbortController();
+      const signal = documentRequestRef.current.signal;
+      
+      // Actualizamos el estado en un batch
       setIsLoading(true);
       setError(null);
       
       if (window.api?.document) {
+        // Idealmente pasaríamos la señal aquí, pero necesitamos adaptar el API
+        // Para una implementación completa, window.api.document.get debería aceptar signal como opción
         const document = await window.api.document.get(id) as Document;
         
+        // Verificamos si la solicitud fue cancelada
+        if (signal.aborted) {
+          return null;
+        }
+        
         if (document) {
+          // Actualizamos el estado en un batch único
           setCurrentDocument(document);
           updateRecentDocuments(document);
         }
@@ -246,6 +297,11 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
       
       return null;
     } catch (error) {
+      // Ignoramos errores de solicitudes abortadas intencionalmente
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return null;
+      }
+      
       console.error('Error getting document:', error);
       setError('Error getting document');
       return null;
@@ -291,36 +347,127 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
     }
   };
   
-  // Actualiza un documento existente
+  // Implementación de actualización de documento con debounce
+  const debouncedUpdateDocument = useCallback(
+    debounce(async (
+      id: string,
+      changes: DocumentChanges,
+      options: { immediate?: boolean; isAutosave?: boolean } = {}
+    ): Promise<boolean> => {
+      try {
+        // Cancelamos cualquier solicitud anterior
+        if (documentRequestRef.current) {
+          documentRequestRef.current.abort();
+        }
+        
+        // Creamos un nuevo controller para esta operación
+        documentRequestRef.current = new AbortController();
+        const signal = documentRequestRef.current.signal;
+        
+        // Solo muestra loading para actualizaciones inmediatas no autosave
+        if (options.immediate && !options.isAutosave) {
+          setIsLoading(true);
+        }
+        
+        setError(null);
+        
+        // Adapta opciones según modo de energía
+        const adaptedOptions = { ...options };
+        
+        // En modos de bajo consumo, prioriza eficiencia sobre inmediatez
+        // a menos que se especifique explícitamente
+        if (currentEnergyMode === 'lowPower' || currentEnergyMode === 'ultraSaving') {
+          if (adaptedOptions.immediate === undefined) {
+            adaptedOptions.immediate = false;
+          }
+        }
+        
+        // Si la solicitud fue cancelada, no continuamos
+        if (signal.aborted) {
+          return false;
+        }
+        
+        if (window.api?.document) {
+          const success = await window.api.document.update({
+            id,
+            changes,
+            options: adaptedOptions
+          });
+          
+          // Verificamos si la solicitud fue cancelada
+          if (signal.aborted) {
+            return false;
+          }
+          
+          // Actualiza documento actual si corresponde, usando función para evitar dependencias
+          if (success && currentDocument?.id === id) {
+            setCurrentDocument(prev => {
+              if (!prev) return null;
+              
+              return {
+                ...prev,
+                ...changes,
+                metadata: {
+                  ...prev.metadata,
+                  ...(changes.metadata || {})
+                }
+              };
+            });
+          }
+          
+          return success;
+        }
+        
+        return false;
+      } catch (error) {
+        // Ignoramos errores de solicitudes abortadas intencionalmente
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return false;
+        }
+        
+        console.error('Error updating document:', error);
+        setError('Error updating document');
+        return false;
+      } finally {
+        // Solo finaliza loading para actualizaciones inmediatas no autosave
+        if (options.immediate && !options.isAutosave) {
+          setIsLoading(false);
+        }
+      }
+    }, 300),
+    [currentEnergyMode, currentDocument]
+  );
+  
+  // Función pública para actualizar documentos
   const updateDocument = async (
     id: string,
     changes: DocumentChanges,
     options: { immediate?: boolean; isAutosave?: boolean } = {}
   ): Promise<boolean> => {
+    // Usamos la versión con debounce para autosave o actualizaciones no inmediatas
+    if (options.isAutosave || !options.immediate) {
+      debouncedUpdateDocument(id, changes, options);
+      return true; // Asumimos éxito para la versión debounced
+    }
+    
+    // Para actualizaciones inmediatas no autosave, usamos la versión sin debounce
     try {
-      // Solo muestra loading para actualizaciones inmediatas no autosave
-      if (options.immediate && !options.isAutosave) {
-        setIsLoading(true);
+      // Cancelamos cualquier solicitud anterior
+      if (documentRequestRef.current) {
+        documentRequestRef.current.abort();
       }
       
+      // Creamos un nuevo controller para esta operación
+      documentRequestRef.current = new AbortController();
+      
+      setIsLoading(true);
       setError(null);
-      
-      // Adapta opciones según modo de energía
-      const adaptedOptions = { ...options };
-      
-      // En modos de bajo consumo, prioriza eficiencia sobre inmediatez
-      // a menos que se especifique explícitamente
-      if (currentEnergyMode === 'lowPower' || currentEnergyMode === 'ultraSaving') {
-        if (adaptedOptions.immediate === undefined) {
-          adaptedOptions.immediate = false;
-        }
-      }
       
       if (window.api?.document) {
         const success = await window.api.document.update({
           id,
           changes,
-          options: adaptedOptions
+          options
         });
         
         // Actualiza documento actual si corresponde
@@ -344,14 +491,16 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
       
       return false;
     } catch (error) {
+      // Ignoramos errores de solicitudes abortadas intencionalmente
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return false;
+      }
+      
       console.error('Error updating document:', error);
       setError('Error updating document');
       return false;
     } finally {
-      // Solo finaliza loading para actualizaciones inmediatas no autosave
-      if (options.immediate && !options.isAutosave) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   };
   
@@ -427,28 +576,39 @@ export const DocumentProvider: React.FC<DocumentProviderProps> = ({
       setIsLoading(true);
       setError(null);
       
-      if (window.api?.document) {
+      // Verifica que la API exista y el método list esté disponible
+      if (window.api?.document?.list) {
         try {
           const documents = await window.api.document.list(folderPath) as Document[];
           return documents || [];
         } catch (apiError) {
           console.error('API error listing documents:', apiError);
           
-          // Intenta usar el adaptador como fallback
+          // Detecta específicamente error de handler no registrado
+          if (apiError instanceof Error && 
+              apiError.message.includes('No handler registered for')) {
+            console.log('Manejador document:list no registrado, usando adaptador como fallback');
+          }
+          
+          // Usa el adaptador como fallback en cualquier caso de error
           if (adapter) {
             console.log('Intentando usar adaptador para obtener documentos');
             return await adapter.getRecentDocuments();
           }
           
-          throw apiError;
+          // Si no hay adaptador disponible
+          return [];
         }
+      } else {
+        console.warn('API document.list no está disponible, usando adaptador');
+        // Si la API no está disponible, usa el adaptador
+        return adapter ? await adapter.getRecentDocuments() : [];
       }
-      
-      return [];
     } catch (error) {
       console.error('Error listing documents:', error);
       setError('Error listing documents');
-      return [];
+      // Intenta usar adaptador como último recurso
+      return adapter ? await adapter.getRecentDocuments() : [];
     } finally {
       setIsLoading(false);
     }

@@ -1,356 +1,321 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Document } from '../../../shared/types/Document';
-import { EnergyMode } from '../../../shared/types/SustainabilityMetrics';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams } from 'react-router-dom';
+import { useDocumentContext } from '../../contexts/DocumentContext';
+import { useSustainabilityContext } from '../../contexts/SustainabilityContext';
+import { useContentRenderer, useViewerSettings, useInteractivity } from './hooks';
+import { ViewerToolbar, ViewerControls, ViewerNotification } from './ui';
+import ContentRenderer from './core/ContentRenderer';
+import { defaultViewerSettings } from './utils/viewerConfig';
+// import { detectContentType } from './utils/contentTypes';
 
 interface DocumentViewerProps {
-  document: Document;
-  energyMode: EnergyMode;
-  renderOptions?: {
-    showMetadata?: boolean;
-    showOutline?: boolean;
-    fontSize?: number;
-    fontFamily?: string;
-    lineHeight?: number;
-    theme?: 'light' | 'dark' | 'auto';
-  };
+  documentId?: string;
+  initialContent?: string;
+  filename?: string | undefined;
+  showToolbar?: boolean;
+  showControls?: boolean;
+  darkMode?: boolean;
+  className?: string;
+  onSwitchToEditor?: () => void;
 }
 
 /**
- * Visor de documentos optimizado para sostenibilidad
- * Renderiza documentos Markdown con diferentes opciones de visualización
+ * Componente principal para visualizar documentos con soporte para múltiples formatos
  */
 const DocumentViewer: React.FC<DocumentViewerProps> = ({
-  document,
-  energyMode,
-  renderOptions = {
-    showMetadata: true,
-    showOutline: true,
-    fontSize: 16,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    lineHeight: 1.6,
-    theme: 'auto'
-  }
+  documentId,
+  initialContent = '',
+  filename,
+  showToolbar = true,
+  showControls = true,
+  darkMode = false,
+  className = '',
+  onSwitchToEditor
 }) => {
-  // Referencias para elementos DOM
-  const viewerRef = useRef<HTMLDivElement>(null);
-  const outlineRef = useRef<HTMLDivElement>(null);
-  
+  // Obtiene ID del documento de la URL si no se proporciona como prop
+  const { id: urlId } = useParams<{ id: string }>();
+  const currentDocId = documentId || urlId;
+
+  // Contextos
+  const { getDocument, currentDocument } = useDocumentContext();
+  const { currentEnergyMode } = useSustainabilityContext();
+
   // Estado local
-  const [renderedContent, setRenderedContent] = useState<string>('');
-  const [outline, setOutline] = useState<{id: string, level: number, text: string}[]>([]);
-  const [isContentExpanded, setIsContentExpanded] = useState(true);
-  const [renderQuality, setRenderQuality] = useState<'high' | 'medium' | 'low'>(
-    energyMode === 'highPerformance' ? 'high' : 
-    energyMode === 'standard' ? 'medium' : 'low'
-  );
-  
-  // Estado para seguimiento de carga de renderizado
-  const [isContentLoading, setIsContentLoading] = useState(true);
-  
-  // Efecto para renderizar contenido Markdown optimizado según modo de energía
+  const [content, setContent] = useState(initialContent);
+  const [title, setTitle] = useState<string | undefined>(undefined);
+  const [docFilename, setDocFilename] = useState<string | undefined>(filename);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    visible: boolean;
+  } | null>(null);
+
+  // Referencias
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Configuración del visor
+  const { settings, updateSettings, /* resetSettings, */ toggleDarkMode } = useViewerSettings({
+    initialSettings: {
+      ...defaultViewerSettings,
+      // Adapta la configuración según el modo de energía
+      enableSyntaxHighlighting: currentEnergyMode !== 'ultraSaving',
+      showLineNumbers: currentEnergyMode !== 'ultraSaving'
+    },
+    darkMode
+  });
+
+  // Procesamiento de contenido
+  const { contentType, processedContent, isProcessing, renderError } = useContentRenderer({
+    content,
+    filename: docFilename,
+    settings
+  });
+
+  // Interactividad del visor
+  const {
+    /* activeElementId, */
+    zoomLevel,
+    handleLinkClick,
+    handleImageClick,
+    handleCopyCode,
+    increaseZoom,
+    decreaseZoom,
+    resetZoom,
+    handleKeyDown
+  } = useInteractivity({
+    content,
+    enableLinks: settings.enableLinks,
+    onLinkClick: (url) => {
+      // Navegar a enlaces internos o abrir enlaces externos
+      if (url.startsWith('#')) {
+        // Enlaces internos se manejan automáticamente
+      } else if (url.startsWith('http') || url.startsWith('https')) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    },
+    onImageLoad: (url, dimensions) => {
+      console.log(`Imagen cargada: ${url}, dimensiones: ${dimensions.width}x${dimensions.height}`);
+    },
+    onCodeCopy: (/* code */) => {
+      setNotification({
+        message: 'Código copiado al portapapeles',
+        type: 'success',
+        visible: true
+      });
+    },
+    maxZoomLevel: 3
+  });
+
+  // Cargar documento si se proporciona un ID
   useEffect(() => {
-    let isMounted = true;
-    
-    const renderMarkdown = async () => {
-      // Iniciamos cargando
-      if (isMounted) setIsContentLoading(true);
-      
-      // Actualiza la calidad de renderizado basada en el modo de energía
-      const quality = energyMode === 'highPerformance' ? 'high' : 
-                    energyMode === 'standard' ? 'medium' : 'low';
-      if (isMounted) setRenderQuality(quality);
-      
-      // Renderizamos el contenido en un worker simulado para no bloquear la UI
-      setTimeout(() => {
-        if (!isMounted) return;
-        
-        try {
-          // Simula un procesamiento Markdown simple para el MVP
-          // En producción usaríamos una biblioteca completa
-          let rendered = document.content
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-blue-600 dark:text-blue-400 hover:underline">$1</a>');
-          
-          // Aplica diferentes niveles de renderizado según el modo de energía
-          if (quality === 'high' || quality === 'medium') {
-            rendered = rendered
-              .replace(/^# (.+)$/gm, '<h1 id="heading-$1" class="text-3xl font-bold my-6 pb-2 border-b border-gray-200 dark:border-gray-700">$1</h1>')
-              .replace(/^## (.+)$/gm, '<h2 id="heading-$1" class="text-2xl font-bold my-5">$1</h2>')
-              .replace(/^### (.+)$/gm, '<h3 id="heading-$1" class="text-xl font-bold my-4">$1</h3>')
-              .replace(/^#### (.+)$/gm, '<h4 id="heading-$1" class="text-lg font-bold my-3">$1</h4>')
-              .replace(/^- (.+)$/gm, '<li class="ml-6 list-disc my-1">$1</li>')
-              .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-6 list-decimal my-1">$2</li>')
-              .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-red-600 dark:text-red-400 text-sm">$1</code>')
-              .replace(/```([\s\S]*?)```/g, (_, p1) => {
-                return `<pre class="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-x-auto my-4"><code>${p1.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
-              });
-            
-            // En calidad alta, agrega características de renderizado adicionales
-            if (quality === 'high') {
-              rendered = rendered
-                .replace(/^> (.+)$/gm, '<blockquote class="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic my-4 text-gray-700 dark:text-gray-300">$1</blockquote>')
-                .replace(/!\[(.+?)\]\((.+?)\)/g, '<figure class="my-4"><img src="$2" alt="$1" class="max-w-full h-auto rounded-md" /><figcaption class="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">$1</figcaption></figure>');
-            }
-            
-            // Agrupa elementos de lista
-            rendered = rendered
-              .replace(/(<li[^>]*>.*<\/li>)(\s*)(<li[^>]*>)/g, '$1$2$3')
-              .replace(/(<li[^>]*>.*<\/li>)(?!\s*<li)/g, '<ul>$1</ul>');
-          } else {
-            // Renderizado básico para modo de bajo consumo
-            rendered = rendered
-              .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold my-4">$1</h1>')
-              .replace(/^## (.+)$/gm, '<h2 class="text-xl font-bold my-3">$1</h2>')
-              .replace(/^### (.+)$/gm, '<h3 class="text-lg font-bold my-2">$1</h3>')
-              .replace(/^- (.+)$/gm, '• $1<br />')
-              .replace(/^(\d+)\. (.+)$/gm, '$1. $2<br />')
-              .replace(/`([^`]+)`/g, '<code>$1</code>')
-              .replace(/```([\s\S]*?)```/g, (_, p1) => {
-                return `<pre>${p1.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-              });
-          }
-          
-          // Párrafos - procesamiento común para todos los modos
-          rendered = rendered.replace(/\n\n/g, '</p><p class="my-4">');
-          rendered = '<p class="my-4">' + rendered + '</p>';
-          
-          // Evita párrafos vacíos o anidados
-          rendered = rendered
-            .replace(/<p>\s*<\/p>/g, '')
-            .replace(/<p>\s*<h([1-6])/g, '<h$1')
-            .replace(/<\/h([1-6])>\s*<\/p>/g, '</h$1>')
-            .replace(/<p>\s*<ul>/g, '<ul>')
-            .replace(/<\/ul>\s*<\/p>/g, '</ul>');
-          
-          if (isMounted) {
-            setRenderedContent(rendered);
-            
-            // Extrae esquema (headings) para navegación
-            if (renderOptions.showOutline) {
-              extractOutline(document.content);
-            }
-            
-            // Marcamos como cargado después de un mínimo de tiempo para evitar parpadeos
-            setTimeout(() => {
-              if (isMounted) setIsContentLoading(false);
-            }, 100);
-          }
-        } catch (error) {
-          console.error('Error rendering markdown:', error);
-          if (isMounted) {
-            setRenderedContent(`<div class="p-4 text-red-600 dark:text-red-400">Error al renderizar el contenido</div>`);
-            setIsContentLoading(false);
-          }
+    if (!currentDocId) {
+      // Si no hay ID pero hay contenido inicial, detectar el tipo
+      if (initialContent) {
+        setContent(initialContent);
+      }
+      return;
+    }
+
+    // Carga el documento
+    const loadDocument = async () => {
+      try {
+        const doc = await getDocument(currentDocId);
+
+        if (doc) {
+          setContent(doc.content);
+          setTitle(doc.title);
+          setDocFilename(doc.path.split('/').pop() || undefined);
+        } else {
+          setNotification({
+            message: `No se pudo encontrar el documento con ID: ${currentDocId}`,
+            type: 'error',
+            visible: true
+          });
         }
-      }, 0);
+      } catch (error) {
+        console.error('Error loading document:', error);
+        setNotification({
+          message: `Error al cargar el documento: ${(error as Error).message || 'Error desconocido'}`,
+          type: 'error',
+          visible: true
+        });
+      }
     };
-    
-    // Aplicamos un pequeño retraso en modos de bajo consumo
-    const delay = energyMode === 'ultraSaving' ? 300 : 0;
-    
-    const timer = setTimeout(renderMarkdown, delay);
+
+    loadDocument();
+  }, [currentDocId, getDocument, initialContent]);
+
+  // Actualizar contenido cuando el documento actual cambia
+  useEffect(() => {
+    if (currentDocument && (!currentDocId || currentDocument.id === currentDocId)) {
+      setContent(currentDocument.content);
+      setTitle(currentDocument.title);
+      setDocFilename(currentDocument.path.split('/').pop() || undefined);
+    }
+  }, [currentDocument, currentDocId]);
+
+  // Efecto para manejar eventos de teclado globales
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Prevenir comportamiento por defecto para nuestros atajos
+      if (
+        (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '0')) ||
+        e.key === 'F11'
+      ) {
+        e.preventDefault();
+      }
+
+      // Manejar zoom con atajos de teclado
+      if (e.ctrlKey) {
+        if (e.key === '+' || e.key === '=') {
+          increaseZoom();
+        } else if (e.key === '-') {
+          decreaseZoom();
+        } else if (e.key === '0') {
+          resetZoom();
+        }
+      }
+
+      // Pantalla completa
+      if (e.key === 'F11') {
+        toggleFullscreen();
+      }
+    };
+
+    // Agregar escucha de eventos
+    window.addEventListener('keydown', handleGlobalKeyDown);
+
+    // Limpiar escucha al desmontar
     return () => {
-      isMounted = false;
-      clearTimeout(timer);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [document.content, energyMode, renderOptions.showOutline]);
-  
-  // Extrae encabezados para crear esquema de navegación
-  const extractOutline = (content: string) => {
-    const headingRegex = /^(#{1,3})\s+(.+)$/gm;
-    const headings: { id: string; level: number; text: string }[] = [];
-    
-    let match: RegExpExecArray | null;
-    while ((match = headingRegex.exec(content)) !== null) {
-      // Assert that the groups are defined.
-      const level = match[1]!.length;
-      const text = match[2]!;
-      
-      const id = `heading-${text.toLowerCase().replace(/\s+/g, '-')}`;
-      if (level <= 3) {
-        headings.push({ id, level, text });
-      }
+  }, [increaseZoom, decreaseZoom, resetZoom]);
+
+  // Alternar pantalla completa
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
     }
-    
-    setOutline(headings);
-  };
-  
-  // Navega a un encabezado específico
-  const scrollToHeading = (id: string) => {
-    if (viewerRef.current) {
-      const element = viewerRef.current.querySelector(`#${id}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-  };
-  
-  // Calcula estilo de indentación para esquema
-  const getOutlineItemStyle = (level: number) => {
-    return { marginLeft: `${(level - 1) * 0.75}rem` };
-  };
-  
-  return (
-    <div className="document-viewer h-full flex flex-col bg-white dark:bg-gray-900">
-      {/* Encabezado con metadatos */}
-      {renderOptions.showMetadata && (
-        <div className="document-header p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">{document.title}</h1>
-              <div className="flex space-x-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {document.metadata.author && (
-                  <div>Autor: {document.metadata.author}</div>
-                )}
-                <div>Actualizado: {new Date(document.updatedAt).toLocaleDateString()}</div>
-                {document.metadata.wordCount && (
-                  <div>{document.metadata.wordCount} palabras</div>
-                )}
-                {document.metadata.readingTime && (
-                  <div>~{document.metadata.readingTime} min de lectura</div>
-                )}
-              </div>
-              {document.tags && document.tags.length > 0 && (
-                <div className="flex flex-wrap mt-2 gap-1">
-                  {document.tags.map(tag => (
-                    <span 
-                      key={tag} 
-                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            
-            <div className="flex space-x-2">
-              <button 
-                className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
-                title="Expandir/Colapsar contenido"
-                onClick={() => setIsContentExpanded(!isContentExpanded)}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth="2" 
-                    d={isContentExpanded 
-                      ? "M20 12H4" 
-                      : "M12 4v16m8-8H4"}
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
+  }, []);
+
+  // Imprimir documento
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
+
+  // Si está procesando, mostrar indicador de carga
+  if (isProcessing) {
+    return (
+      <div className="flex justify-center items-center h-full w-full bg-white dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Cargando documento...</p>
         </div>
-      )}
-      
-      {/* Contenido principal */}
-      {isContentExpanded && (
-        <div className="flex-grow flex overflow-hidden">
-          {/* Panel de esquema lateral */}
-          {renderOptions.showOutline && outline.length > 0 && (
-            <div 
-              ref={outlineRef}
-              className={`outline-panel w-48 p-4 border-r border-gray-200 dark:border-gray-700 
-                         overflow-y-auto flex-shrink-0 ${energyMode === 'ultraSaving' ? 'hidden' : ''}`}
-            >
-              <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Contenido</h3>
-              <ul className="space-y-2 text-sm">
-                {outline.map((item, index) => (
-                  <li 
-                    key={index}
-                    style={getOutlineItemStyle(item.level)}
-                    className="truncate"
-                  >
-                    <button
-                      className="hover:text-blue-600 dark:hover:text-blue-400 truncate w-full text-left"
-                      onClick={() => scrollToHeading(item.id)}
-                    >
-                      {item.text}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          
-          {/* Visor principal con skeleton durante carga */}
-          <div 
-            ref={viewerRef}
-            className="markdown-viewer flex-grow p-6 overflow-y-auto relative"
-            style={{
-              fontSize: `${renderOptions.fontSize}px`,
-              fontFamily: renderOptions.fontFamily,
-              lineHeight: renderOptions.lineHeight
+      </div>
+    );
+  }
+
+  // Si hay error de renderizado, mostrar mensaje y permitir descarga del contenido
+  if (renderError) {
+    return (
+      <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-md">
+        <h3 className="text-lg font-medium mb-2">Error al renderizar el documento</h3>
+        <p className="mb-4">{renderError}</p>
+        <div className="flex space-x-2 mb-4">
+          <button
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => {
+              // Crear un blob y descargarlo como archivo
+              const blob = new Blob([content], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = docFilename || 'document.md';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
             }}
           >
-            {/* Skeleton mientras carga el contenido */}
-            {isContentLoading && !renderedContent && (
-              <div className="absolute inset-0 p-6 animate-pulse">
-                <div className="max-w-3xl mx-auto">
-                  <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-md w-3/4 mb-6"></div>
-                  
-                  <div className="space-y-3 mb-8">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-full"></div>
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-5/6"></div>
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-full"></div>
-                  </div>
-                  
-                  <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded-md w-1/2 mb-4"></div>
-                  
-                  <div className="space-y-3 mb-8">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-full"></div>
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-3/4"></div>
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-5/6"></div>
-                  </div>
-                  
-                  <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded-md w-2/3 mb-4"></div>
-                  
-                  <div className="space-y-3">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-full"></div>
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-4/5"></div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Contenido real con transición suave - siempre visible aunque esté cargando 
-                para evitar pantalla en blanco si hay problemas de renderizado */}
-            <div 
-              className={`max-w-3xl mx-auto text-gray-800 dark:text-gray-200 transition-opacity duration-300 ${
-                isContentLoading && !renderedContent ? 'opacity-0' : 'opacity-100'
-              }`}
-              dangerouslySetInnerHTML={{ 
-                __html: renderedContent || `<div class="p-4 text-gray-500 dark:text-gray-400">
-                  <p>Cargando contenido del documento...</p>
-                </div>` 
-              }}
-            />
-          </div>
+            Descargar contenido
+          </button>
+          {onSwitchToEditor && (
+            <button
+              className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+              onClick={onSwitchToEditor}
+            >
+              Abrir en editor
+            </button>
+          )}
         </div>
+        <pre className="bg-white dark:bg-gray-800 p-4 rounded-md overflow-auto text-sm">
+          {content.substring(0, 500)}{content.length > 500 ? '...' : ''}
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`document-viewer flex flex-col h-full bg-white dark:bg-gray-900 ${className}`}
+      onKeyDown={handleKeyDown}
+      tabIndex={0} // Para poder recibir eventos de teclado
+    >
+      {/* Barra de herramientas */}
+      {showToolbar && (
+        <ViewerToolbar
+          title={title}
+          filename={docFilename}
+          settings={settings}
+          zoomLevel={zoomLevel}
+          onZoomIn={increaseZoom}
+          onZoomOut={decreaseZoom}
+          onZoomReset={resetZoom}
+          onToggleTheme={toggleDarkMode}
+          onSettingsChange={updateSettings}
+        />
       )}
-      
-      {/* Pie con información de sostenibilidad */}
-      <div className="flex items-center justify-between p-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-        <div className="flex space-x-4">
-          <span>Versión {document.version}</span>
-          <span>Modo visualización: {renderQuality}</span>
-        </div>
-        
-        {document.metadata.sustainability && (
-          <div className="flex items-center space-x-2">
-            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span title="Tamaño optimizado">
-              {document.metadata.sustainability.contentReuseFactor.toFixed(1)}x ahorro
-            </span>
-          </div>
+
+      {/* Área de contenido */}
+      <div className="flex-grow overflow-hidden relative">
+        <ContentRenderer
+          content={processedContent}
+          contentType={contentType}
+          settings={settings}
+          filename={docFilename}
+          zoomLevel={zoomLevel}
+          onLinkClick={(url, _event) => {
+            handleLinkClick(url as any);
+          }}
+          onImageClick={handleImageClick}
+          onCopyCode={handleCopyCode}
+          className="h-full"
+        />
+
+        {/* Notificación */}
+        {notification && notification.visible && (
+          <ViewerNotification
+            message={notification.message}
+            type={notification.type}
+            onDismiss={() => setNotification(null)}
+          />
         )}
       </div>
+
+      {/* Controles flotantes */}
+      {showControls && (
+        <ViewerControls
+          zoomLevel={zoomLevel}
+          onZoomIn={increaseZoom}
+          onZoomOut={decreaseZoom}
+          onZoomReset={resetZoom}
+          onFullscreen={toggleFullscreen}
+          onPrint={handlePrint}
+        />
+      )}
     </div>
   );
 };

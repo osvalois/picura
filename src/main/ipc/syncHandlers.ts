@@ -61,8 +61,20 @@ interface PendingChange {
  * Optimizado para eficiencia en redes y recursos
  */
 export function setupSyncHandlers(syncService: SyncService) {
+  // Helper function to safely register handlers
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Remove any existing handler first
+      ipcMain.removeHandler(channel);
+      // Register the new handler
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+
   // Inicializar servicio de sincronización
-  ipcMain.handle('sync:initialize', async (_, options?: SyncOptions) => {
+  safelyRegisterHandler('sync:initialize', async (_: any, options?: SyncOptions) => {
     try {
       return await syncService.initialize(options);
     } catch (error) {
@@ -72,7 +84,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Sincronizar documentos
-  ipcMain.handle('sync:sync', async (_, documentId?: string) => {
+  safelyRegisterHandler('sync:sync', async (_: any, documentId?: string) => {
     try {
       return await syncService.sync(documentId);
     } catch (error) {
@@ -82,7 +94,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Obtener estado de sincronización
-  ipcMain.handle('sync:getStatus', async () => {
+  safelyRegisterHandler('sync:getStatus', async () => {
     try {
       return await syncService.getStatus();
     } catch (error) {
@@ -92,7 +104,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Habilitar/deshabilitar sincronización
-  ipcMain.handle('sync:enable', async (_, enabled: boolean) => {
+  safelyRegisterHandler('sync:enable', async (_: any, enabled: boolean) => {
     try {
       return await syncService.enableSync(enabled);
     } catch (error) {
@@ -102,7 +114,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Establecer remoto
-  ipcMain.handle('sync:setRemote', async (_, args: {
+  safelyRegisterHandler('sync:setRemote', async (_: any, args: {
     url: string,
     token?: string
   }) => {
@@ -116,7 +128,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Resolver conflicto
-  ipcMain.handle('sync:resolveConflict', async (_, args: {
+  safelyRegisterHandler('sync:resolveConflict', async (_: any, args: {
     documentId: string,
     resolution: ConflictResolution
   }) => {
@@ -130,7 +142,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Obtener cambios pendientes
-  ipcMain.handle('sync:getPendingChanges', async () => {
+  safelyRegisterHandler('sync:getPendingChanges', async () => {
     try {
       return await syncService.getPendingChanges();
     } catch (error) {
@@ -140,7 +152,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Obtener timestamp de última sincronización
-  ipcMain.handle('sync:getLastSyncTimestamp', async () => {
+  safelyRegisterHandler('sync:getLastSyncTimestamp', async () => {
     try {
       return await syncService.getLastSyncTimestamp();
     } catch (error) {
@@ -150,7 +162,7 @@ export function setupSyncHandlers(syncService: SyncService) {
   });
 
   // Verificar si está configurado
-  ipcMain.handle('sync:isConfigured', async () => {
+  safelyRegisterHandler('sync:isConfigured', async () => {
     try {
       return await syncService.isConfigured();
     } catch (error) {

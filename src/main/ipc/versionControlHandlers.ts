@@ -23,8 +23,20 @@ interface VersionControlService {
  * Optimizado para operaciones Git y seguimiento de documentos
  */
 export function setupVersionControlHandlers(versionControlService: VersionControlService) {
+  // Helper function to safely register handlers
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Remove any existing handler first
+      ipcMain.removeHandler(channel);
+      // Register the new handler
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+
   // Inicializar repositorio
-  ipcMain.handle('versionControl:initialize', async (_, repoPath: string) => {
+  safelyRegisterHandler('versionControl:initialize', async (_: any, repoPath: string) => {
     try {
       return await versionControlService.initialize(repoPath);
     } catch (error) {
@@ -34,7 +46,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Obtener estado del repositorio
-  ipcMain.handle('versionControl:getStatus', async () => {
+  safelyRegisterHandler('versionControl:getStatus', async () => {
     try {
       return await versionControlService.getStatus();
     } catch (error) {
@@ -44,7 +56,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Hacer commit de cambios
-  ipcMain.handle('versionControl:commit', async (_, args: {
+  safelyRegisterHandler('versionControl:commit', async (_: any, args: {
     message: string,
     files?: string[]
   }) => {
@@ -58,7 +70,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Enviar cambios al remoto (push)
-  ipcMain.handle('versionControl:push', async () => {
+  safelyRegisterHandler('versionControl:push', async () => {
     try {
       return await versionControlService.push();
     } catch (error) {
@@ -68,7 +80,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Traer cambios del remoto (pull)
-  ipcMain.handle('versionControl:pull', async () => {
+  safelyRegisterHandler('versionControl:pull', async () => {
     try {
       return await versionControlService.pull();
     } catch (error) {
@@ -78,7 +90,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Cambiar de rama
-  ipcMain.handle('versionControl:checkout', async (_, branch: string) => {
+  safelyRegisterHandler('versionControl:checkout', async (_: any, branch: string) => {
     try {
       return await versionControlService.checkout(branch);
     } catch (error) {
@@ -88,7 +100,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Crear nueva rama
-  ipcMain.handle('versionControl:createBranch', async (_, name: string) => {
+  safelyRegisterHandler('versionControl:createBranch', async (_: any, name: string) => {
     try {
       return await versionControlService.createBranch(name);
     } catch (error) {
@@ -98,7 +110,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Obtener historial de commits
-  ipcMain.handle('versionControl:getHistory', async (_, args: {
+  safelyRegisterHandler('versionControl:getHistory', async (_: any, args: {
     path?: string,
     limit?: number
   }) => {
@@ -112,7 +124,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Obtener diferencias (diff)
-  ipcMain.handle('versionControl:getDiff', async (_, path?: string) => {
+  safelyRegisterHandler('versionControl:getDiff', async (_: any, path?: string) => {
     try {
       return await versionControlService.getDiff(path);
     } catch (error) {
@@ -122,7 +134,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Seguimiento de documento
-  ipcMain.handle('versionControl:trackDocument', async (_, args: {
+  safelyRegisterHandler('versionControl:trackDocument', async (_: any, args: {
     documentId: string,
     path: string
   }) => {
@@ -136,7 +148,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Obtener historial de documento
-  ipcMain.handle('versionControl:getDocumentHistory', async (_, documentId: string) => {
+  safelyRegisterHandler('versionControl:getDocumentHistory', async (_: any, documentId: string) => {
     try {
       return await versionControlService.getDocumentHistory(documentId);
     } catch (error) {
@@ -146,7 +158,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Revertir documento a versión anterior
-  ipcMain.handle('versionControl:revertDocument', async (_, args: {
+  safelyRegisterHandler('versionControl:revertDocument', async (_: any, args: {
     documentId: string,
     version: string
   }) => {
@@ -160,7 +172,7 @@ export function setupVersionControlHandlers(versionControlService: VersionContro
   });
 
   // Verificar si el repositorio está inicializado
-  ipcMain.handle('versionControl:isInitialized', async () => {
+  safelyRegisterHandler('versionControl:isInitialized', async () => {
     try {
       return await versionControlService.isRepositoryInitialized();
     } catch (error) {

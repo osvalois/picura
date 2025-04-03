@@ -128,7 +128,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
         {/* Título y botón de acciones principal */}
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center">
-            <h2 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">Documentos</h2>
+          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">Picura</h1>
           </div>
           
           <div className="relative">

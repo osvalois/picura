@@ -7,8 +7,20 @@ import { DocumentChanges, DocumentMetadata } from '../../shared/types/Document';
  * Implementa patrones óptimos para rendimiento y sostenibilidad
  */
 export function setupDocumentHandlers(documentService: DocumentService) {
+  // Helper function to safely register handlers
+  const safelyRegisterHandler = (channel: string, handler: any) => {
+    try {
+      // Remove any existing handler first
+      ipcMain.removeHandler(channel);
+      // Register the new handler
+      ipcMain.handle(channel, handler);
+    } catch (error) {
+      console.error(`Error registering handler for ${channel}:`, error);
+    }
+  };
+
   // Crear documento
-  ipcMain.handle('document:create', async (_, args: {
+  safelyRegisterHandler('document:create', async (_: any, args: {
     title?: string,
     initialContent?: string,
     metadata?: Partial<DocumentMetadata>,
@@ -24,7 +36,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Obtener documento
-  ipcMain.handle('document:get', async (_, id: string) => {
+  safelyRegisterHandler('document:get', async (_: any, id: string) => {
     try {
       return await documentService.getDocument(id);
     } catch (error) {
@@ -34,7 +46,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Actualizar documento
-  ipcMain.handle('document:update', async (_, args: {
+  safelyRegisterHandler('document:update', async (_: any, args: {
     id: string,
     changes: DocumentChanges,
     options?: { immediate?: boolean; isAutosave?: boolean }
@@ -50,7 +62,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Eliminar documento
-  ipcMain.handle('document:delete', async (_, args: {
+  safelyRegisterHandler('document:delete', async (_: any, args: {
     id: string,
     options?: { immediate?: boolean }
   }) => {
@@ -64,7 +76,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Listar documentos
-  ipcMain.handle('document:list', async (_, _folderPath?: string) => {
+  safelyRegisterHandler('document:list', async (_: any, _folderPath?: string) => {
     try {
       return await documentService.listDocuments();
     } catch (error) {
@@ -74,7 +86,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Actualizar metadatos
-  ipcMain.handle('document:updateMetadata', async (_, args: {
+  safelyRegisterHandler('document:updateMetadata', async (_: any, args: {
     id: string,
     metadata: Partial<DocumentMetadata>
   }) => {
@@ -88,7 +100,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Actualizar ruta de documento
-  ipcMain.handle('document:updatePath', async (_, args: {
+  safelyRegisterHandler('document:updatePath', async (_: any, args: {
     id: string,
     newPath: string
   }) => {
@@ -102,7 +114,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Actualizar etiquetas
-  ipcMain.handle('document:updateTags', async (_, args: {
+  safelyRegisterHandler('document:updateTags', async (_: any, args: {
     id: string,
     tags: string[]
   }) => {
@@ -116,7 +128,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Obtener estadísticas de documentos
-  ipcMain.handle('document:getStats', async () => {
+  safelyRegisterHandler('document:getStats', async () => {
     try {
       return await documentService.getDocumentStats();
     } catch (error) {
@@ -126,7 +138,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Invalidar caché
-  ipcMain.handle('document:invalidateCache', async (_, documentId?: string) => {
+  safelyRegisterHandler('document:invalidateCache', async (_: any, documentId?: string) => {
     try {
       documentService.invalidateCache(documentId);
       return true;
@@ -137,7 +149,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Importar archivos
-  ipcMain.handle('document:importFiles', async (event) => {
+  safelyRegisterHandler('document:importFiles', async (event: any) => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (!window) {
@@ -151,7 +163,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Importar carpeta
-  ipcMain.handle('document:importFolder', async (event, options) => {
+  safelyRegisterHandler('document:importFolder', async (event: any, options: any) => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (!window) {
@@ -165,7 +177,7 @@ export function setupDocumentHandlers(documentService: DocumentService) {
   });
 
   // Importar archivo específico
-  ipcMain.handle('document:importFile', async (_, args: {
+  safelyRegisterHandler('document:importFile', async (_: any, args: {
     filePath: string,
     targetPath?: string
   }) => {
@@ -177,9 +189,9 @@ export function setupDocumentHandlers(documentService: DocumentService) {
       throw new Error('Failed to import file');
     }
   });
-  
+
   // Abrir archivo (diálogo)
-  ipcMain.handle('document:openFile', async (event) => {
+  safelyRegisterHandler('document:openFile', async (event: any) => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (!window) {
@@ -191,9 +203,9 @@ export function setupDocumentHandlers(documentService: DocumentService) {
       throw new Error('Failed to open file');
     }
   });
-  
+
   // Abrir carpeta (diálogo)
-  ipcMain.handle('document:openFolder', async (event, options) => {
+  safelyRegisterHandler('document:openFolder', async (event: any, options: any) => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (!window) {
@@ -205,9 +217,9 @@ export function setupDocumentHandlers(documentService: DocumentService) {
       throw new Error('Failed to open folder');
     }
   });
-  
+
   // Abrir archivo específico (sin diálogo)
-  ipcMain.handle('document:openSpecificFile', async (_, filePath: string) => {
+  safelyRegisterHandler('document:openSpecificFile', async (_: any, filePath: string) => {
     try {
       return await documentService.openFile(filePath);
     } catch (error) {
@@ -215,9 +227,9 @@ export function setupDocumentHandlers(documentService: DocumentService) {
       throw new Error('Failed to open specific file');
     }
   });
-  
+
   // Establecer documento activo
-  ipcMain.handle('document:setActive', async (_, documentId: string) => {
+  safelyRegisterHandler('document:setActive', async (_: any, documentId: string) => {
     try {
       return await documentService.setActiveDocument(documentId);
     } catch (error) {
@@ -225,9 +237,9 @@ export function setupDocumentHandlers(documentService: DocumentService) {
       throw new Error('Failed to set active document');
     }
   });
-  
+
   // Obtener documento activo
-  ipcMain.handle('document:getActive', async () => {
+  safelyRegisterHandler('document:getActive', async () => {
     try {
       return documentService.getActiveDocument();
     } catch (error) {

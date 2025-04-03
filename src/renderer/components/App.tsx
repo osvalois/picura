@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense, memo, Component, ErrorInfo, ReactNode } from 'react';
 import { SustainabilityProvider, useSustainabilityContext } from '../contexts/SustainabilityContext';
 import { DocumentProvider, useDocumentContext } from '../contexts/DocumentContext';
 import NavigationSidebar from './navigation/NavigationSidebar';
@@ -6,6 +6,63 @@ import SustainabilityIndicator from './common/SustainabilityIndicator';
 import { Document } from '../../shared/types/Document';
 import { DocumentAPI } from '../utils/ipcAPI';
 import { EnergyMode } from '../../shared/types/SustainabilityMetrics';
+import { debounce } from '../utils/performanceUtils';
+
+// Componente de límite de errores para capturar problemas en los componentes hijos
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    console.error("Error en componente:", error);
+    console.error("Stack trace:", errorInfo.componentStack);
+  }
+
+  override render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-white dark:bg-gray-900 p-6">
+          <div className="max-w-md text-center">
+            <div className="text-red-500 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+              Ha ocurrido un error
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              {this.state.error?.message || "Error al cargar el componente"}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700"
+            >
+              Intentar de nuevo
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Carga diferida para mejorar rendimiento inicial
 const EditorContainer = lazy(() => import('./editor/EditorContainer'));
@@ -18,6 +75,31 @@ const LoadingFallback = () => (
     <div className="flex flex-col items-center space-y-4">
       <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       <p className="text-gray-600 dark:text-gray-300 text-sm font-medium">Cargando componente...</p>
+    </div>
+  </div>
+);
+
+// Fallback mejorado para editor con mensaje más claro
+const EditorLoadingFallback = () => (
+  <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900">
+    <div className="bg-gray-50 dark:bg-gray-800 p-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-md w-64 animate-pulse"></div>
+    </div>
+    <div className="flex-grow flex items-center justify-center p-8">
+      <div className="flex flex-col items-center space-y-6 max-w-md text-center">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center text-blue-500">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+        </div>
+        <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Preparando el editor</h3>
+        <p className="text-gray-600 dark:text-gray-400">
+          Estamos cargando todos los componentes necesarios para editar de forma óptima...
+        </p>
+      </div>
     </div>
   </div>
 );
@@ -52,7 +134,6 @@ const AppContent: React.FC = () => {
     openFile,
     openFolder,
     setActiveDocument,
-    isLoading: documentLoading 
   } = useDocumentContext();
   
   const { currentEnergyMode, setEnergyMode, sustainabilityMetrics } = useSustainabilityContext();
@@ -66,6 +147,7 @@ const AppContent: React.FC = () => {
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
+  const [darkMode] = useState(false);
   
   // Inicialización de la aplicación y carga de datos
 useEffect(() => {
@@ -107,14 +189,17 @@ useEffect(() => {
     // Limpieza si es necesario
   };
 }, [listDocuments]);
-  // Manejadores de eventos optimizados con useCallback para memoización
-  const handleDocumentSelect = useCallback(async (id: string) => {
-    try {
-      await setActiveDocument(id);
-    } catch (error) {
-      console.error(`Error selecting document ${id}:`, error);
-    }
-  }, [setActiveDocument]);
+  // Manejadores de eventos optimizados con useCallback y debounce para memoización
+  const handleDocumentSelect = useCallback(
+    debounce(async (id: string) => {
+      try {
+        await setActiveDocument(id);
+      } catch (error) {
+        console.error(`Error selecting document ${id}:`, error);
+      }
+    }, 300),
+    [setActiveDocument]
+  );
   
   const handleCreateDocument = useCallback(async () => {
     setIsCreatingDocument(true);
@@ -301,30 +386,54 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
     );
   }, [documents, searchTerm]);
   
-  // Detecta si la app está cargando
-  const isLoading = documentLoading || !isAppReady;
+// Componente memoizado del asistente de IA
+const AIAssistantWidget = memo(({ 
+  document, 
+  energyMode, 
+  onClose 
+}: { 
+  document: Document, 
+  energyMode: EnergyMode, 
+  onClose: () => void 
+}) => {
+  // Verificamos que tengamos todo lo necesario para renderizar
+  if (!document?.id) return null;
 
-  const renderAIAssistant = useCallback(() => {
-    if (!showAI || !currentDocument?.id) return null;
-    
-    return (
-      <div className="fixed right-4 bottom-16 z-50 w-80 h-96 shadow-lg rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out">
-        <Suspense fallback={<LoadingFallback />}>
-          <AIAssistant 
-            documentId={currentDocument.id}
-            documentContent={currentDocument.content || ''}
-            onClose={handleToggleAI}
-            energyMode={currentEnergyMode}
-            documentTitle={currentDocument.title || ''}
-            editorContent={currentDocument.content || ''}
-            cursorPosition={0}
-            onSuggestionApply={(suggestion) => console.log('Sugerencia aplicada:', suggestion)}
-            enabled={true}
-          />
-        </Suspense>
-      </div>
-    );
-  }, [showAI, currentDocument, currentEnergyMode, handleToggleAI]);
+  const uniqueKey = `ai-assistant-${document.id}-${Date.now()}`;
+  
+  return (
+    <div className="fixed right-4 bottom-16 z-50 w-80 h-96 shadow-lg rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-all duration-300 ease-in-out">
+      <Suspense fallback={<LoadingFallback />}>
+        <AIAssistant 
+          key={uniqueKey}
+          documentId={document.id}
+          documentContent={document.content || ''}
+          onClose={onClose}
+          energyMode={energyMode}
+          documentTitle={document.title || ''}
+          editorContent={document.content || ''}
+          cursorPosition={0}
+          onSuggestionApply={(suggestion) => console.log('Sugerencia aplicada:', suggestion)}
+          enabled={true}
+        />
+      </Suspense>
+    </div>
+  );
+});
+
+// Renderizador seguro del asistente de IA
+const renderAIAssistant = useCallback(() => {
+  // Verificación de seguridad: solo renderizamos si tenemos un documento activo
+  if (!showAI || !currentDocument?.id) return null;
+  
+  return (
+    <AIAssistantWidget 
+      document={currentDocument} 
+      energyMode={currentEnergyMode} 
+      onClose={handleToggleAI} 
+    />
+  );
+}, [showAI, currentDocument, currentEnergyMode, handleToggleAI]);
   // Renderiza la pantalla inicial de carga
   if (!isAppReady) {
     return (
@@ -342,7 +451,7 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
   return (
     <div className="app-container h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {/* Barra superior */}
-      <header className="app-header flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+      <header className="app-header flex items-center justify-between px-2 py-5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center">
           <button 
             onClick={handleToggleSidebar}
@@ -353,13 +462,11 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          
-          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">Picura</h1>
           <div className="ml-2 flex items-center">
             <span className="text-xs bg-gradient-to-r from-green-100 to-green-50 dark:from-green-800 dark:to-green-900 text-green-800 dark:text-green-200 px-2 py-0.5 rounded-full border border-green-200 dark:border-green-700">
               <div className="flex items-center space-x-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
-                <span>Sostenible</span>
+                <span>Free</span>
               </div>
             </span>
           </div>
@@ -436,36 +543,33 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
         
         {/* Área de contenido principal */}
         <main className="flex-grow overflow-hidden">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="flex flex-col items-center space-y-4">
-                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-gray-600 dark:text-gray-300">Cargando contenido...</p>
-              </div>
-            </div>
-          ) : currentDocument ? (
-            <Suspense fallback={<LoadingFallback />}>
-              {viewMode === 'edit' ? (
-                <EditorContainer
+          {currentDocument ? (
+            viewMode === 'edit' ? (
+              <ErrorBoundary>
+                <Suspense fallback={<EditorLoadingFallback />}>
+                  <EditorContainer
+                    key={`editor-${currentDocument.id}`}
+                    documentId={currentDocument.id}
+                    initialContent={currentDocument.content}
+                    readOnly={false}
+                    showToolbar={true}
+                    showStatusBar={true}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : (
+              <Suspense fallback={<LoadingFallback />}>
+                <DocumentViewer
                   documentId={currentDocument.id}
                   initialContent={currentDocument.content}
-                  readOnly={false}
+                  filename={currentDocument.path.split('/').pop()}
                   showToolbar={true}
-                  showStatusBar={true}
+                  showControls={true}
+                  darkMode={darkMode}
+                  onSwitchToEditor={() => setViewMode('edit')}
                 />
-              ) : (
-                <DocumentViewer
-                  document={currentDocument}
-                  energyMode={currentEnergyMode}
-                  renderOptions={{
-                    showMetadata: true,
-                    showOutline: true,
-                    fontSize: 16,
-                    fontFamily: 'system-ui, -apple-system, sans-serif',
-                  }}
-                />
-              )}
-            </Suspense>
+              </Suspense>
+            )
           ) : (
             <div className="h-full flex items-center justify-center p-4">
               <div className="text-center max-w-md p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800">
@@ -518,7 +622,7 @@ const updateFolders = useCallback((docs: Document[], newFolders: string[] = []) 
         </main>
         
         {/* Asistente de IA flotante */}
-        {renderAIAssistant()}
+        {showAI && currentDocument ? renderAIAssistant() : null}
       </div>
       
       {/* Pie de página */}

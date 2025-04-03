@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { EnergyMode } from '../../../../shared/types/SustainabilityMetrics';
 import { useSustainabilityContext } from '../../../contexts/SustainabilityContext';
 import EnergyModeSelector from '../../common/EnergyModeSelector';
+import { debounce } from '../../../utils/performanceUtils';
 
 interface StatusBarProps {
   // Estadísticas básicas
@@ -52,27 +53,37 @@ const StatusBar: React.FC<StatusBarProps> = ({
   const [showEnergySelector, setShowEnergySelector] = useState(false);
   const [animateMetrics, setAnimateMetrics] = useState(false);
   
-  // Efecto para animar las métricas en cambios
+  // Extraemos y memorizamos las dependencias para evitar triggers innecesarios
+  const cpuUsage = sustainabilityMetrics?.cpu?.usage;
+  const memoryUsage = sustainabilityMetrics?.memory?.usagePercent;
+
+  // Efecto para animar las métricas en cambios con cleanup uniforme
   useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    
     if (sustainabilityMetrics) {
       setAnimateMetrics(true);
-      const timer = setTimeout(() => setAnimateMetrics(false), 1000);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => setAnimateMetrics(false), 1000);
     }
     
-    // Add an explicit return for the case when sustainabilityMetrics is falsy
-    return undefined;
-  }, [sustainabilityMetrics?.cpu?.usage, sustainabilityMetrics?.memory?.usagePercent]);
+    // Cleanup consistente que funciona en todos los casos
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [cpuUsage, memoryUsage]);
   
-  // Maneja el cambio de modo de energía
-  const handleEnergyModeChange = async (mode: EnergyMode) => {
-    try {
-      await setEnergyMode(mode);
-      setShowEnergySelector(false);
-    } catch (error) {
-      console.error('Error al cambiar el modo de energía:', error);
-    }
-  };
+  // Maneja el cambio de modo de energía con debounce para evitar llamadas rápidas
+  const handleEnergyModeChange = useCallback(
+    debounce(async (mode: EnergyMode) => {
+      try {
+        await setEnergyMode(mode);
+        setShowEnergySelector(false);
+      } catch (error) {
+        console.error('Error al cambiar el modo de energía:', error);
+      }
+    }, 300),
+    [setEnergyMode]
+  );
   
   // Formatea valor con 1 decimal
   const formatValue = (value: number | undefined) => {
